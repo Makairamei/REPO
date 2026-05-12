@@ -1,0 +1,129 @@
+package com.Melolo
+
+import com.lagradost.cloudstream3.TvType
+import com.Melolo.MeloloHTMLConstants as HTML
+import com.Melolo.MeloloAPIConstants as API
+
+/**
+ * 📘 MASTER CONFIGURATION: UNIVERSAL AGGREGATOR (V3.0 - MODULAR)
+ * 
+ * Sesuai Aturan Refaktor:
+ * 1. Menggunakan Commit 5826152 (Versi 2.2.0) sebagai Ground Truth.
+ * 2. Menggabungkan data dari MeloloHTMLConstants dan MeloloAPIConstants.
+ * 3. Mempertahankan kompatibilitas dengan Melolo (Universal Engine).
+ */
+object MeloloConstants {
+
+    // ========================================================================
+    // --- [1] AGGREGATED METADATA ---
+    // ========================================================================
+
+    val CONFIG_NAMES = HTML.CONFIG_NAMES + API.CONFIG_NAMES
+    val CONFIG_MAIN_URLS = HTML.CONFIG_MAIN_URLS + API.CONFIG_MAIN_URLS
+    val CONFIG_LANGS = HTML.CONFIG_LANGS + API.CONFIG_LANGS
+    val CONFIG_SUPPORTED_TYPES = HTML.CONFIG_SUPPORTED_TYPES + API.CONFIG_SUPPORTED_TYPES
+    val CONFIG_MAIN_PAGE_LISTS = HTML.CONFIG_MAIN_PAGE_LISTS + API.CONFIG_MAIN_PAGE_LISTS
+
+    // HTML Specifics (Directly exposed for compatibility)
+    val CONFIG_SERIES_URLS = HTML.CONFIG_SERIES_URLS
+    val CONFIG_SEARCH_URLS = HTML.CONFIG_SEARCH_URLS
+    val CONFIG_SEARCH_PATH_PATTERNS = HTML.CONFIG_SEARCH_PATH_PATTERNS
+    val CONFIG_MAIN_PAGE_PATH_PATTERNS = HTML.CONFIG_MAIN_PAGE_PATH_PATTERNS
+    val CONFIG_MOVIE_PATH_SEGMENTS = HTML.CONFIG_MOVIE_PATH_SEGMENTS
+    val CONFIG_TV_PATH_SEGMENTS = HTML.CONFIG_TV_PATH_SEGMENTS
+    
+    // API Specifics (Directly exposed for compatibility)
+    val CONFIG_SEARCH_IS_JSON = HTML.CONFIG_SEARCH_IS_JSON + API.CONFIG_SEARCH_IS_JSON
+    val CONFIG_SEARCH_JSON_ROOTS = HTML.CONFIG_SEARCH_JSON_ROOTS + API.CONFIG_SEARCH_JSON_ROOTS
+    val CONFIG_SEARCH_JSON_TITLES = HTML.CONFIG_SEARCH_JSON_TITLES + API.CONFIG_SEARCH_JSON_TITLES
+    val CONFIG_SEARCH_JSON_HREFS = HTML.CONFIG_SEARCH_JSON_HREFS + API.CONFIG_SEARCH_JSON_HREFS
+    val CONFIG_SEARCH_JSON_POSTERS = HTML.CONFIG_SEARCH_JSON_POSTERS + API.CONFIG_SEARCH_JSON_POSTERS
+    val CONFIG_SEARCH_JSON_POSTER_PREFIXES = HTML.CONFIG_SEARCH_JSON_POSTER_PREFIXES + API.CONFIG_SEARCH_JSON_POSTER_PREFIXES
+    val CONFIG_SEARCH_JSON_TYPES = HTML.CONFIG_SEARCH_JSON_TYPES + API.CONFIG_SEARCH_JSON_TYPES
+
+    // API Engine Specifics
+    val CONFIG_API_PROXY_URLS = API.CONFIG_API_PROXY_URLS
+    val CONFIG_API_ADDITIONAL_KEYS = API.CONFIG_API_ADDITIONAL_KEYS
+
+    // ========================================================================
+    // --- [2] SHARED ENGINE CONFIGURATION ---
+    // ========================================================================
+
+    val CONFIG_EPISODE_DATA_URL_PATTERNS = listOf("GLOBAL:::{url}")
+    val CONFIG_SEARCH_PAGE_LIMITS = HTML.CONFIG_SEARCH_PAGE_LIMITS + API.CONFIG_SEARCH_PAGE_LIMITS
+    val CONFIG_HREF_CLEAN_REGEXPS = HTML.CONFIG_HREF_CLEAN_REGEXPS + API.CONFIG_HREF_CLEAN_REGEXPS
+    val CONFIG_HREF_CLEAN_REPLACES = HTML.CONFIG_HREF_CLEAN_REPLACES + API.CONFIG_HREF_CLEAN_REPLACES
+    
+    // Aligned with V2.2.0 Ground Truth
+    val CONFIG_REVERSE_EPISODES = listOf("LayarKaca21:::false", "IndoDrama21:::false", "Pencurimovie:::false", "GLOBAL:::true")
+
+    val CONFIG_USE_DOCUMENT_LARGE = HTML.CONFIG_USE_DOCUMENT_LARGE
+    val CONFIG_LOAD_RECURSIVE_LIMIT = listOf("GLOBAL:::2")
+    val CONFIG_LOAD_LINKS_SEMAPHORE = listOf("GLOBAL:::6")
+    val CONFIG_CACHE_TTL_MINUTES = listOf("GLOBAL:::5")
+
+    // ========================================================================
+    // --- [3] SELECTORS (RE-EXPOSED FROM HTML) ---
+    // ========================================================================
+
+    val SEARCH_ITEMS = HTML.SEARCH_ITEMS
+    val SEARCH_TITLE = HTML.SEARCH_TITLE
+    val SEARCH_HREF = HTML.SEARCH_HREF
+    val SEARCH_POSTER = HTML.SEARCH_POSTER
+    val SEARCH_RATING = HTML.SEARCH_RATING
+    val SEARCH_EP_TEXT = HTML.SEARCH_EP_TEXT
+
+    val LOAD_TITLE = HTML.LOAD_TITLE
+    val LOAD_POSTER = HTML.LOAD_POSTER
+    val LOAD_BANNER = HTML.LOAD_BANNER
+    val LOAD_DESC = HTML.LOAD_DESC
+    val LOAD_INFO_BOX = HTML.LOAD_INFO_BOX
+    val LOAD_TAGS = HTML.LOAD_TAGS
+    val LOAD_RATING = HTML.LOAD_RATING
+    val LOAD_STATUS = HTML.LOAD_STATUS
+    val LOAD_QUALITY = HTML.LOAD_QUALITY
+    val LOAD_TRAILER = HTML.LOAD_TRAILER
+    val LOAD_RECOMMEND = HTML.LOAD_RECOMMEND
+
+    val EPISODE_ITEMS = HTML.EPISODE_ITEMS
+    val EPISODE_HREF = HTML.EPISODE_HREF
+    val EPISODE_TITLE = HTML.EPISODE_TITLE
+    val EPISODE_NUM = HTML.EPISODE_NUM
+    val EPISODE_DESC = HTML.EPISODE_DESC
+    val EPISODE_TIME = HTML.EPISODE_TIME
+
+    val LINK_OPTIONS = HTML.LINK_OPTIONS
+    val DOWNLOAD_ITEMS = HTML.DOWNLOAD_ITEMS
+    val ACTOR_ITEMS = HTML.ACTOR_ITEMS
+    val ACTOR_NAME = HTML.ACTOR_NAME
+
+    // ========================================================================
+    // --- [4] UI HOOKS & STRINGS (SHARED) ---
+    // ========================================================================
+
+    val CONFIG_HORIZONTAL_KEYWORDS = HTML.CONFIG_HORIZONTAL_KEYWORDS
+    val CONFIG_HOOK_IS_HORIZONTAL = HTML.CONFIG_HOOK_IS_HORIZONTAL
+    val CONFIG_HOOK_YEAR_SELECTOR = HTML.CONFIG_HOOK_YEAR_SELECTOR
+    val CONFIG_HOOK_YEAR_EXTRACTOR = HTML.CONFIG_HOOK_YEAR_EXTRACTOR
+    val CONFIG_HOOK_REFERER_PLAYER = HTML.CONFIG_HOOK_REFERER_PLAYER
+    val CONFIG_HOOK_IFRAME_SELECTORS = HTML.CONFIG_HOOK_IFRAME_SELECTORS
+    
+    val FOLLOW_LINK_SELECTOR = HTML.FOLLOW_LINK_SELECTOR
+    val CONFIG_GLOBAL_HEADERS = HTML.CONFIG_GLOBAL_HEADERS
+
+    const val VAL_REFERER = "Referer"
+    const val DEFAULT_TIMEOUT = 15000L
+
+    val STR_DUB = listOf("GLOBAL:::dub")
+    val STR_ONGOING = listOf("GLOBAL:::Ongoing")
+    val STR_EPISODE = listOf("GLOBAL:::Episode")
+    val STR_SERIES = listOf("GLOBAL:::Series")
+
+    val ATTR_TITLE = HTML.ATTR_TITLE
+    val ATTR_IMAGE = HTML.ATTR_IMAGE
+    val ATTR_HREF = HTML.ATTR_HREF
+    val ATTR_VALUE = HTML.ATTR_VALUE
+    val ATTR_CONTENT = HTML.ATTR_CONTENT
+
+    val BLOAT_REGEX = Regex("(?i)(\\bONA\\b|\\bOngoing\\b|\\bCompleted\\b|\\bSpecial\\b|\\bTAMAT\\b|\\bIndo\\b|\\bFull\\b|\\bSeason\\b|Subtitle\\s*Indonesia|Nonton|Anime|Movie|TV|Series|Lengkap|HD|Free|\\d{3,4}p|Dual\\s*Audio|\\s*–\\s*|\\s*\\|\\s*)", RegexOption.IGNORE_CASE)
+}
