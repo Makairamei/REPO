@@ -9,7 +9,7 @@ class YunshanidPlugin : Plugin() {
     override fun load() {
         registerMainAPI(YunshanidProvider())
 
-        // FINAL BOSS: hanya core + stabil extractor
+        // GOD MODE: only stable + universal extractors
         registerExtractorAPI(Gofile())
         registerExtractorAPI(Mp4Upload())
         registerExtractorAPI(FileMoon())
