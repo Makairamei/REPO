@@ -9,7 +9,7 @@ class YunshanidPlugin : Plugin() {
     override fun load() {
         registerMainAPI(YunshanidProvider())
 
-        // Core extractor yang paling aman & kompatibel
+        // minimal + stable extractor set (anti crash multi-version)
         registerExtractorAPI(Gofile())
         registerExtractorAPI(Mp4Upload())
         registerExtractorAPI(FileMoon())
