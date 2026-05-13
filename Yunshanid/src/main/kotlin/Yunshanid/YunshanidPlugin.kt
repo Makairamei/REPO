@@ -9,11 +9,14 @@ class YunshanidPlugin : Plugin() {
     override fun load() {
         registerMainAPI(YunshanidProvider())
 
-        // ONLY stable core (no noise, no crash risk)
-        registerExtractorAPI(Gofile())
+        // Extractor set aman (stable first)
         registerExtractorAPI(FileMoon())
-        registerExtractorAPI(Mp4Upload())
         registerExtractorAPI(StreamWish())
         registerExtractorAPI(Voe())
+        registerExtractorAPI(DoodLaExtractor())
+        registerExtractorAPI(Mp4Upload())
+        registerExtractorAPI(Gofile())
+        registerExtractorAPI(PixelDrain())
+        registerExtractorAPI(Mediafire())
     }
 }
