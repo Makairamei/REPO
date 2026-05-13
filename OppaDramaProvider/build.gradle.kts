@@ -1,9 +1,9 @@
-version = 8
+version = 1
 
 cloudstream {
-    description = "Melongmovie"
+    description = "OppaDrama — Streaming Drama Korean, Movie and TV Series"
     language = "id"
-    authors = listOf("BetbetMiro")
+    authors = listOf("Miku")
 
     /**
      * Status int as the following:
@@ -19,5 +19,5 @@ cloudstream {
         "Movie",
     )
 
-    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://tv11.melongmovies.com&size=%size%"
+    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://45.11.57.243&size=%size%"
 }
