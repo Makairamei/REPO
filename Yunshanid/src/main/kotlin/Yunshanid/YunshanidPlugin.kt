@@ -9,7 +9,7 @@ class YunshanidPlugin : Plugin() {
     override fun load() {
         registerMainAPI(YunshanidProvider())
 
-        // ASCENDED CORE (stable only)
+        // OMEGA CORE (minimal + ultra stable)
         registerExtractorAPI(Gofile())
         registerExtractorAPI(FileMoon())
         registerExtractorAPI(Mp4Upload())
