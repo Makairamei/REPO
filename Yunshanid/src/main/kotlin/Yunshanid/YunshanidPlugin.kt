@@ -9,7 +9,7 @@ class YunshanidPlugin : Plugin() {
     override fun load() {
         registerMainAPI(YunshanidProvider())
 
-        // minimal + stable extractor set (anti crash multi-version)
+        // FINAL BOSS: hanya core + stabil extractor
         registerExtractorAPI(Gofile())
         registerExtractorAPI(Mp4Upload())
         registerExtractorAPI(FileMoon())
