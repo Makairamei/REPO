@@ -1,7 +1,7 @@
 package com.betbet.yunshanid
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -13,7 +13,7 @@ class YunshanidProvider : MainAPI() {
     override val hasMainPage = true
     override var lang = "id"
 
-    override val sequentialMainPage = true
+    override var sequentialMainPage = true
 
     override val supportedTypes = setOf(
         TvType.Anime,
@@ -112,7 +112,6 @@ class YunshanidProvider : MainAPI() {
             href,
             type
         ) {
-
             this.posterUrl = poster
         }
     }
@@ -170,7 +169,6 @@ class YunshanidProvider : MainAPI() {
 
         return try {
 
-            // REST API FAST SEARCH
             val response = app.get(
                 "$mainUrl/wp-json/wp/v2/search?search=$query"
             ).parsedSafe<List<Map<String, Any>>>()
@@ -195,7 +193,6 @@ class YunshanidProvider : MainAPI() {
 
         } catch (_: Exception) {
 
-            // FALLBACK SEARCH
             val document =
                 app.get(
                     "$mainUrl/?s=$query"
@@ -274,11 +271,9 @@ class YunshanidProvider : MainAPI() {
                         ?.attr("href")
                         ?: ""
 
-                Episode(
-                    epUrl,
-                    epName
-                ).apply {
-                    episode = index + 1
+                newEpisode(epUrl) {
+                    this.name = epName
+                    this.episode = index + 1
                 }
             }
 
@@ -322,11 +317,9 @@ class YunshanidProvider : MainAPI() {
                                     if (epUrl.isNotBlank()) {
 
                                         ajaxEpisodes.add(
-                                            Episode(
-                                                epUrl,
-                                                ep.text()
-                                            ).apply {
-                                                episode = index + 1
+                                            newEpisode(epUrl) {
+                                                this.name = ep.text()
+                                                this.episode = index + 1
                                             }
                                         )
                                     }
@@ -347,10 +340,9 @@ class YunshanidProvider : MainAPI() {
                         -> normalEpisodes
 
                 else -> listOf(
-                    Episode(
-                        url,
-                        "Full Movie"
-                    )
+                    newEpisode(url) {
+                        this.name = "Full Movie"
+                    }
                 )
             }
 
