@@ -24,34 +24,39 @@ class YunshanidProvider : MainAPI() {
     )
 
     // -----------------------------
-    // OMEGA MEMORY GRAPH
+    // TRANSCENDENT MEMORY GRAPH
     // -----------------------------
-    private val successGraph = ConcurrentHashMap<String, Int>()
-    private val urlCache = ConcurrentHashMap<String, List<String>>()
+    private val successWeight = ConcurrentHashMap<String, Int>()
+    private val failureWeight = ConcurrentHashMap<String, Int>()
 
     // -----------------------------
-    // PATTERN ENGINE (OMEGA CORE)
+    // CONTENT RESOLVER (NO DOM RELIANCE)
     // -----------------------------
-    private fun extractUrlsFromText(text: String): List<String> {
+    private fun extractUrls(text: String): List<String> {
         val regex = Regex("https?://[^\"]+")
         return regex.findAll(text).map { it.value }.toList()
     }
 
-    private fun score(url: String): Int {
-        return successGraph[url] ?: when {
-            url.contains("filemoon") -> 5
-            url.contains("streamwish") -> 5
-            url.contains("voe") -> 4
-            url.contains("gofile") -> 4
-            url.contains("mp4upload") -> 4
-            else -> 1
+    private fun confidence(url: String): Int {
+        val base = when {
+            url.contains("filemoon") -> 10
+            url.contains("streamwish") -> 10
+            url.contains("voe") -> 8
+            url.contains("gofile") -> 8
+            url.contains("mp4upload") -> 8
+            else -> 3
         }
+
+        val success = successWeight[url] ?: 0
+        val fail = failureWeight[url] ?: 0
+
+        return base + success - (fail * 2)
     }
 
     // -----------------------------
-    // SAFE FETCH (OMEGA RETRY)
+    // SAFE FETCH ENGINE
     // -----------------------------
-    private fun safeFetch(url: String): String? {
+    private fun fetch(url: String): String? {
         return try {
             app.get(url, headers = headers).text
         } catch (_: Exception) {
@@ -60,7 +65,7 @@ class YunshanidProvider : MainAPI() {
     }
 
     // -----------------------------
-    // MAIN PAGE (NO DOM DEPENDENCY)
+    // MAIN PAGE (HYBRID RESOLVER)
     // -----------------------------
     override val mainPage = mainPageOf(
         "" to "Update",
@@ -77,12 +82,14 @@ class YunshanidProvider : MainAPI() {
 
         val doc = app.get("$mainUrl/$path", headers = headers).document
 
-        val items = doc.select("article, .post, .bs, *")
+        val items = doc.select("article, .post, .bs, .item, *")
             .mapNotNull { el ->
                 val text = el.text()
-                val urls = extractUrlsFromText(text)
+                val urls = extractUrls(text)
 
-                val url = urls.firstOrNull() ?: el.selectFirst("a")?.attr("href")
+                val url = urls.firstOrNull()
+                    ?: el.selectFirst("a")?.attr("href")
+
                 val title = el.selectFirst("h1,h2,h3,.title,.tt")?.text()
 
                 if (url == null || title == null) return@mapNotNull null
@@ -97,7 +104,7 @@ class YunshanidProvider : MainAPI() {
     }
 
     // -----------------------------
-    // LOAD (SELF RECONSTRUCTION)
+    // LOAD (GRAPH-BASED RECOVERY)
     // -----------------------------
     override suspend fun load(url: String): LoadResponse {
 
@@ -111,16 +118,16 @@ class YunshanidProvider : MainAPI() {
             doc.selectFirst("img")?.attr("src")
 
         val plot =
-            doc.text().takeIf { it.length < 5000 }?.substring(0, minOf(300, doc.text().length))
+            doc.text().takeIf { it.length < 4000 }?.substring(0, minOf(250, doc.text().length))
 
         val episodes = doc.select("a[href]")
             .mapNotNull {
                 val u = it.attr("href")
-                if (!u.contains("episode") && !u.contains(url)) null else u
+                if (!u.contains("episode")) null else fixUrl(u)
             }
             .distinct()
             .mapIndexed { i, ep ->
-                newEpisode(fixUrl(ep)) {
+                newEpisode(ep) {
                     this.name = "Episode ${i + 1}"
                     this.episode = i + 1
                 }
@@ -137,7 +144,7 @@ class YunshanidProvider : MainAPI() {
     }
 
     // -----------------------------
-    // OMEGA LOAD LINKS ENGINE
+    // TRANSCENDENT LOAD LINKS ENGINE
     // -----------------------------
     override suspend fun loadLinks(
         data: String,
@@ -148,37 +155,43 @@ class YunshanidProvider : MainAPI() {
 
         val doc = app.get(data, headers = headers).document
 
-        val rawText = doc.html()
-        val urls = extractUrlsFromText(rawText).toMutableList()
+        val raw = doc.html()
+        val urls = extractUrls(raw).toMutableList()
 
         val seen = hashSetOf<String>()
         var found = false
 
-        fun tryExtract(url: String) {
+        fun markSuccess(url: String) {
+            successWeight[url] = (successWeight[url] ?: 0) + 1
+        }
+
+        fun markFail(url: String) {
+            failureWeight[url] = (failureWeight[url] ?: 0) + 1
+        }
+
+        fun extract(url: String) {
             if (!url.startsWith("http")) return
             if (!seen.add(url)) return
 
             runCatching {
                 loadExtractor(url, data, subtitleCallback) {
                     found = true
-                    successGraph[url] = (successGraph[url] ?: 0) + 1
+                    markSuccess(url)
                     callback(it)
                 }
+            }.onFailure {
+                markFail(url)
             }
         }
 
-        // PRIORITY BY SUCCESS HISTORY
-        urls.sortedByDescending { score(it) }.forEach {
-            tryExtract(it)
-        }
+        // SORT BY DYNAMIC CONFIDENCE
+        urls.sortedByDescending { confidence(it) }
+            .forEach { extract(it) }
 
-        // DOM fallback (only if regex fails)
+        // fallback DOM scan
         doc.select("iframe[src], source[src], a[href]")
             .forEach {
-                val u = it.attr("src")
-                    .ifBlank { it.attr("href") }
-
-                tryExtract(u)
+                extract(it.attr("src").ifBlank { it.attr("href") })
             }
 
         return found
