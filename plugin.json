@@ -1,0 +1,15 @@
+{
+  "iconUrl": "https://midasxxi.com/wp-content/uploads/2024/01/cropped-favicon.png",
+  "apiVersion": 1,
+  "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
+  "fileSize": 21789,
+  "status": 1,
+  "language": "id",
+  "authors": ["Asm0d3usX"],
+  "tvTypes": ["AsianDrama", "TvSeries", "Movie"],
+  "version": 1,
+  "internalName": "MidasXXi",
+  "description": "📺 Streaming Movie and TV Series",
+  "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/Betbet/MidasXXi.cs3",
+  "name": "MidasXXi"
+}
