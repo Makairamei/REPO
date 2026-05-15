@@ -12,7 +12,7 @@ cloudstream {
     // All of these properties are optional, you can safely remove them
 
     description = "Multi Language Movies and Series Provider"
-    authors = listOf("NivinCNC,Phisher98")
+    authors = listOf("BetbetMiro")
 
     /**
      * Status int as the following:

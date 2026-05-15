@@ -2,7 +2,7 @@ version = 1
 
 cloudstream {
     language = "id"
-    authors = listOf("Hexated")
+    authors = listOf("BetbetMiro")
 
     status = 1
     tvTypes = listOf(
