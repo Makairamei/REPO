@@ -1,13 +1,13 @@
 // use an integer for version numbers
-version = 6
+version = 3
 
 
 cloudstream {
     language = "id"
     // All of these properties are optional, you can safely remove them
 
-    description = "AnimeSail — Streaming Anime, Donghua Subtitle Indonesia"
-     authors = listOf("BetbetMiro")
+    // description = "Lorem Ipsum"
+    authors = listOf("BetbetMiro")
 
     /**
      * Status int as the following:
@@ -23,5 +23,8 @@ cloudstream {
         "OVA",
     )
 
-    iconUrl = "https://aghanim.xyz/wp-content/themes/animesail/assets/images/ico.png"
+
+    iconUrl = "https://icons.duckduckgo.com/ip3/154.26.137.28.ico"
+
+    isCrossPlatform = true
 }
