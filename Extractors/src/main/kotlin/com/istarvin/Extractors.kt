@@ -9,7 +9,6 @@ import com.lagradost.cloudstream3.extractors.MixDrop
 import com.lagradost.cloudstream3.extractors.StreamWishExtractor
 import com.lagradost.cloudstream3.extractors.VidHidePro
 import com.lagradost.cloudstream3.extractors.VidStack
-import com.lagradost.cloudstream3.extractors.VidhideExtractor
 import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -98,13 +97,15 @@ class SubtitleCat : ExtractorApi() {
         return this.filter { c -> c.isLetterOrDigit() }.lowercase()
     }
 
+    private val codeRegex = Regex("""[a-zA-Z]+-\d+""")
+
     override suspend fun getUrl(
         url: String,
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val query = url.substringAfter("query=")
+        val query = url.substringAfter("query=").let { codeRegex.find(it)?.value } ?: return
         val queryUrl = "${mainUrl}/index.php?search=$query"
         val doc = app.get(queryUrl).document
         val subs = doc.select(".sub-table a")
