@@ -1,16 +1,12 @@
 package com.yunshanid
 
-import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
 class YunshanIDProvider: Plugin() {
-    override fun load(context: Context) {
-        // Mendaftarkan API Utama Yunshan ID
+    override fun load() { 
         registerMainAPI(YunshanID())
-        
-        // Mendaftarkan semua mesin Extractor Video pendukung
         registerExtractorAPI(Dailymotion())
         registerExtractorAPI(Geodailymotion())
         registerExtractorAPI(Odnoklassniki())
