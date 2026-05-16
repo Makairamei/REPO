@@ -20,21 +20,23 @@ class ShortMax : MainAPI() {
     override val supportedTypes = setOf(TvType.TvSeries, TvType.AsianDrama)
 
     companion object {
-        private const val BASE_API_URL = "https://www.shorttv.live" 
-        const val ENDPOINT_RECOMMEND = "$BASE_API_URL/api/v1/shortplay/recommend"
-        const val ENDPOINT_NEW_RELEASE = "$BASE_API_URL/api/v1/shortplay/new"
-        const val ENDPOINT_SEARCH = "$BASE_API_URL/api/v1/shortplay/search"
-        const val ENDPOINT_DETAIL = "$BASE_API_URL/api/v1/shortplay/detail"
-        const val ENDPOINT_VIDEO = "$BASE_API_URL/api/v1/shortplay/video"
+        // 🚀 KOORDINAT ASLI HASIL BURUANMU!
+        private const val BASE_API_URL = "https://api.shorttv.live" 
+        
+        const val ENDPOINT_RECOMMEND = "$BASE_API_URL/gapi/v1/movie/recommendList"
+        const val ENDPOINT_SEARCH = "$BASE_API_URL/gapi/v1/movie/search"
+        const val ENDPOINT_DETAIL = "$BASE_API_URL/gapi/v1/movie/detail"
+        const val ENDPOINT_VIDEO = "$BASE_API_URL/gapi/v1/movie/episodePlayInfo"
     }
 
+    // Menu Halaman Utama
     override val mainPage = mainPageOf(
-        ENDPOINT_RECOMMEND to "Rekomendasi Utama",
-        ENDPOINT_NEW_RELEASE to "Drama Rilis Baru"
+        ENDPOINT_RECOMMEND to "Rekomendasi Utama"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val targetUrl = "${request.data}?page=$page"
+        // Menembak endpoint dengan parameter page dan pageSize standar API mereka
+        val targetUrl = "${request.data}?page=$page&pageSize=20"
         val responseText = app.get(targetUrl).text
         val json = tryParseJson<ShortPlayListResponse>(responseText)
 
@@ -53,7 +55,8 @@ class ShortMax : MainAPI() {
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) return emptyList()
 
-        val targetUrl = "$ENDPOINT_SEARCH?q=${URLEncoder.encode(cleanQuery, "UTF-8")}"
+        // Menyesuaikan query parameter sesuai intercept pencarian asli
+        val targetUrl = "$ENDPOINT_SEARCH?keyword=${URLEncoder.encode(cleanQuery, "UTF-8")}&page=1&pageSize=20"
         val responseText = app.get(targetUrl).text
         val json = tryParseJson<ShortPlayListResponse>(responseText)
 
@@ -69,7 +72,8 @@ class ShortMax : MainAPI() {
         val playId = url.trim()
         if (playId.isBlank()) throw ErrorLoadingException("ID Drama Tidak Valid")
 
-        val targetUrl = "$ENDPOINT_DETAIL?id=$playId"
+        // Memanggil detail drama pakai shortPlayId asli
+        val targetUrl = "$ENDPOINT_DETAIL?shortPlayId=$playId"
         val responseText = app.get(targetUrl).text
         val detailData = tryParseJson<ShortPlayDetailResponse>(responseText)?.data 
             ?: throw ErrorLoadingException("Gagal Memuat Detail Konten")
@@ -104,6 +108,7 @@ class ShortMax : MainAPI() {
         val playId = payload.playId ?: return false
         val epNum = payload.episodeNum ?: return false
 
+        // Memanggil link streaming berdasarkan shortPlayId dan episodeNum asli
         val targetUrl = "$ENDPOINT_VIDEO?shortPlayId=$playId&episodeNum=$epNum"
         val responseText = app.get(targetUrl).text
         val videoObj = tryParseJson<VideoPlayResponse>(responseText)?.episode ?: return false
@@ -120,7 +125,6 @@ class ShortMax : MainAPI() {
 
                 val cleanLabel = qualityKey.replace("video_", "") + "p"
 
-                // FIX: Memindahkan referer dan quality ke dalam blok lambda {} agar sesuai aturan framework!
                 callback.invoke(
                     newExtractorLink(
                         source = this.name,
