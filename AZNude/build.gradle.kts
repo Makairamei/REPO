@@ -3,7 +3,7 @@ version = 7
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "Welcome to AZNUDE! We have a large, free, every day growing universe of celebrity nudity where stars from all movies and series shine."
 
     /**

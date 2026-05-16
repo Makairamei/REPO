@@ -20,7 +20,7 @@ class BilibiliProvider : MainAPI() {
     override var mainUrl = "https://www.bilibili.tv"
     override var name = "BilibiliTV(Requires CS Prerelease)"
     override val hasMainPage = true
-    override var lang = "ta"
+    override var lang = "id"
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(
         TvType.Anime,

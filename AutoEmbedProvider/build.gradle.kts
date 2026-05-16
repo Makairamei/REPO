@@ -1,8 +1,8 @@
 version = 1
 
 cloudstream {
-    language = "en"
-    authors = listOf("Duro92")
+    language = "id"
+    authors = listOf("BetbetMiro")
     description = "AutoEmbed TMDB-backed movie and TV catalog provider"
     status = 1
     tvTypes = listOf(

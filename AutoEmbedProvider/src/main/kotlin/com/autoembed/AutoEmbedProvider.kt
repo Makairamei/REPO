@@ -22,7 +22,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class AutoEmbedProvider : MainAPI() {
     override var mainUrl = "https://www.themoviedb.org"
     override var name = "AutoEmbed😒"
-    override var lang = "en"
+    override var lang = "id"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)

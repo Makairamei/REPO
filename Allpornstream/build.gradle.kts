@@ -3,7 +3,7 @@ version = 1
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "All Porn Stream - Free Porn HD Videos. Watch the best high definition sex movies with hot babes. Allpornstream.com provides you thousands of 1080p, 4k and free porn videos, hd porn tube"
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")

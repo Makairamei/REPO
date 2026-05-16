@@ -10,7 +10,7 @@ class Chatrubate : MainAPI() {
     override var mainUrl = "https://chaturbate.com"
     override var name = "Chaturbate"
     override val hasMainPage = true
-    override var lang = "en"
+    override var lang = "id"
     override val hasDownloadSupport = true
     override val hasChromecastSupport = true
     override val supportedTypes = setOf(TvType.NSFW)

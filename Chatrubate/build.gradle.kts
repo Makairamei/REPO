@@ -1,8 +1,8 @@
 version = 4
 
 cloudstream {
-    authors     = listOf("kraptor", "BetbetMiro")
-    language    = "en"
+    authors     = listOf("BetbetMiro")
+    language    = "id"
     description = "Chaturbate - Free Adult Webcams, Live Sex, Free Sex Chat, Exhibitionist & Pornstar Free Cams"
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")

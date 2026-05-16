@@ -6,7 +6,7 @@ cloudstream {
     // All of these properties are optional, you can safely remove them
 
     description = "Contains SeaTV (Chinese)"
-    language    = "zh"
+    language    = "id"
     authors = listOf("BetbetMiror")
 
     /**

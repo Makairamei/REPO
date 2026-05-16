@@ -2,7 +2,7 @@ version = 1
 
 cloudstream {
     description = "Azmovies"
-    language = "en"
+    language = "id"
     authors = listOf("BetbetMiro")
 
     status = 1

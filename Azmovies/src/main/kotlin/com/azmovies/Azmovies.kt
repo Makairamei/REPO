@@ -36,7 +36,7 @@ class Azmovies : MainAPI() {
     override var name = "Azmovies😪"
     override val hasMainPage = true
     override val hasQuickSearch = true
-    override var lang = "en"
+    override var lang = "id"
     override val supportedTypes = setOf(TvType.Movie)
 
     override val mainPage =

@@ -10,7 +10,7 @@ class Cam4Provider : MainAPI() {
     override var mainUrl              = "https://www.cam4.com"
     override var name                 = "Cam4"
     override val hasMainPage          = true
-    override var lang                 = "en"
+    override var lang                 = "id"
     override val hasDownloadSupport   = true
     override val hasChromecastSupport = true
     override val supportedTypes       = setOf(TvType.NSFW)
