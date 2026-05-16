@@ -7,7 +7,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class YunshanIDProvider: Plugin() {
     override fun load(context: Context) {
-        YunshanID.context = context
+        // Baris context yang error sudah dihapus
         registerMainAPI(YunshanID())
         registerExtractorAPI(Dailymotion())
         registerExtractorAPI(Geodailymotion())
@@ -16,12 +16,10 @@ class YunshanIDProvider: Plugin() {
         registerExtractorAPI(OkRuHTTP())
         registerExtractorAPI(Rumble())
         registerExtractorAPI(StreamRuby())
-        registerExtractorAPI(svilla())
-        registerExtractorAPI(svanila())
         registerExtractorAPI(Vidguardto())
         registerExtractorAPI(Vidguardto1())
         registerExtractorAPI(Vidguardto2())
         registerExtractorAPI(Vidguardto3())
-
+        // svilla & svanila yang hilang sudah dihapus
     }
 }
