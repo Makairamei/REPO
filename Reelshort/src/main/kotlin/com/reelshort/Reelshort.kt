@@ -12,11 +12,8 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import java.net.URLEncoder
 
 class Reelshort : MainAPI() {
-    companion object {
-        var context: android.content.Context? = null
-    }
     override var mainUrl = buildBaseUrl()
-    override var name = "ReelShort💗"
+    override var name = "ReelShort"
     override var lang = "id"
     override val hasMainPage = true
     override val hasQuickSearch = true
@@ -29,7 +26,6 @@ class Reelshort : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        context?.let { StarPopupHelper.showStarPopupIfNeeded(it) }
         if (page > 1) return newHomePageResponse(request.name, emptyList())
 
         val shelf = fetchShelfWithFallback(request.data)
@@ -57,8 +53,7 @@ class Reelshort : MainAPI() {
 
         val filteredFromUrl = getQueryParam(url, "filtered_title")?.takeIf { it.isNotBlank() }
         val detail = fetchBookDetail(bookId)
-        val filteredTitle = filteredFromUrl
-            ?: detail?.filteredTitle?.takeIf { it.isNotBlank() }
+        val filteredTitle = filteredFromUrl ?: detail?.filteredTitle?.takeIf { it.isNotBlank() }
 
         val chapterNameById = detail?.chapterBase
             .orEmpty()
@@ -71,6 +66,7 @@ class Reelshort : MainAPI() {
         val episodeItems = fetchEpisodes(bookId, filteredTitle)
             .filter { (it.episode ?: 0) > 0 }
             .distinctBy { it.episode to it.chapterId }
+            
         val episodes = if (episodeItems.isNotEmpty()) {
             episodeItems
                 .sortedBy { it.episode ?: Int.MAX_VALUE }
@@ -107,10 +103,9 @@ class Reelshort : MainAPI() {
                 }
         }
 
-        val title = detail?.bookTitle?.takeIf { it.isNotBlank() }
-            ?: "ReelShort"
-
+        val title = detail?.bookTitle?.takeIf { it.isNotBlank() } ?: "ReelShort"
         val safeUrl = buildBookUrl(bookId, filteredTitle)
+        
         return newTvSeriesLoadResponse(title, safeUrl, TvType.AsianDrama, episodes) {
             posterUrl = detail?.bookPic
             plot = detail?.specialDesc
@@ -151,7 +146,6 @@ class Reelshort : MainAPI() {
                 this.referer = "$mainUrl/"
             }
         )
-
         return true
     }
 
@@ -169,7 +163,6 @@ class Reelshort : MainAPI() {
             val fallback = fetchShelf("/api/v1/reelshort/newrelease")
             if (!fallback?.books.isNullOrEmpty()) return fallback
         }
-
         return primary
     }
 
@@ -179,13 +172,11 @@ class Reelshort : MainAPI() {
             "/api/v1/reelshort/newrelease",
             "/api/v1/reelshort/recommend",
         )
-
         for (path in paths) {
             val shelf = fetchShelf(path) ?: continue
             val item = shelf.books?.firstOrNull { it.bookId == bookId }
             if (item != null) return item
         }
-
         return null
     }
 
