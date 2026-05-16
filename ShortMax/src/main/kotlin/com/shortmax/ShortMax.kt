@@ -20,34 +20,50 @@ class ShortMax : MainAPI() {
     override val supportedTypes = setOf(TvType.TvSeries, TvType.AsianDrama)
 
     companion object {
-        // 🚀 KOORDINAT ASLI HASIL BURUANMU!
         private const val BASE_API_URL = "https://api.shorttv.live" 
         
         const val ENDPOINT_RECOMMEND = "$BASE_API_URL/gapi/v1/movie/recommendList"
         const val ENDPOINT_SEARCH = "$BASE_API_URL/gapi/v1/movie/search"
         const val ENDPOINT_DETAIL = "$BASE_API_URL/gapi/v1/movie/detail"
         const val ENDPOINT_VIDEO = "$BASE_API_URL/gapi/v1/movie/episodePlayInfo"
+
+        // 🛡️ HEADERS SAPU JAGAT: Menyamar menjadi Aplikasi Resmi Android ShortMax
+        // Ini ampuh untuk menembus proteksi Cloudflare dan mengembalikan data asli!
+        val APP_HEADERS = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+            "Accept" to "application/json, text/plain, */*",
+            "Content-Type" to "application/json",
+            "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Origin" to "https://www.shorttv.live",
+            "Referer" to "https://www.shorttv.live/"
+        )
     }
 
-    // Menu Halaman Utama
     override val mainPage = mainPageOf(
         ENDPOINT_RECOMMEND to "Rekomendasi Utama"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        // Menembak endpoint dengan parameter page dan pageSize standar API mereka
         val targetUrl = "${request.data}?page=$page&pageSize=20"
-        val responseText = app.get(targetUrl).text
+        
+        // Mengirim request dengan proteksi Android Headers utuh
+        val responseText = app.get(targetUrl, headers = APP_HEADERS).text
         val json = tryParseJson<ShortPlayListResponse>(responseText)
 
-        val homeResults = json?.results.orEmpty().mapNotNull { item ->
+        // FILTER STRUKTUR JALUR GANDA: Mengambil dari root .results, .data.results, ATAU .data.list
+        val rawItems = json?.results 
+            ?: json?.data?.results 
+            ?: json?.data?.list 
+            ?: emptyList()
+
+        val homeResults = rawItems.mapNotNull { item ->
             val id = item.shortPlayId ?: return@mapNotNull null
             newTvSeriesSearchResponse(item.name.orEmpty(), id.toString(), TvType.AsianDrama) {
                 this.posterUrl = item.cover
             }
         }.distinctBy { it.url }
 
-        val hasNextPage = json?.isEnd == false
+        val hasNextPage = json?.isEnd == false || json?.data?.isEnd == false
         return newHomePageResponse(HomePageList(request.name, homeResults), hasNextPage)
     }
 
@@ -55,12 +71,16 @@ class ShortMax : MainAPI() {
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) return emptyList()
 
-        // Menyesuaikan query parameter sesuai intercept pencarian asli
         val targetUrl = "$ENDPOINT_SEARCH?keyword=${URLEncoder.encode(cleanQuery, "UTF-8")}&page=1&pageSize=20"
-        val responseText = app.get(targetUrl).text
+        val responseText = app.get(targetUrl, headers = APP_HEADERS).text
         val json = tryParseJson<ShortPlayListResponse>(responseText)
 
-        return json?.results.orEmpty().mapNotNull { item ->
+        val rawItems = json?.results 
+            ?: json?.data?.results 
+            ?: json?.data?.list 
+            ?: emptyList()
+
+        return rawItems.mapNotNull { item ->
             val id = item.shortPlayId ?: return@mapNotNull null
             newTvSeriesSearchResponse(item.name.orEmpty(), id.toString(), TvType.AsianDrama) {
                 this.posterUrl = item.cover
@@ -72,9 +92,8 @@ class ShortMax : MainAPI() {
         val playId = url.trim()
         if (playId.isBlank()) throw ErrorLoadingException("ID Drama Tidak Valid")
 
-        // Memanggil detail drama pakai shortPlayId asli
         val targetUrl = "$ENDPOINT_DETAIL?shortPlayId=$playId"
-        val responseText = app.get(targetUrl).text
+        val responseText = app.get(targetUrl, headers = APP_HEADERS).text
         val detailData = tryParseJson<ShortPlayDetailResponse>(responseText)?.data 
             ?: throw ErrorLoadingException("Gagal Memuat Detail Konten")
 
@@ -108,9 +127,8 @@ class ShortMax : MainAPI() {
         val playId = payload.playId ?: return false
         val epNum = payload.episodeNum ?: return false
 
-        // Memanggil link streaming berdasarkan shortPlayId dan episodeNum asli
         val targetUrl = "$ENDPOINT_VIDEO?shortPlayId=$playId&episodeNum=$epNum"
-        val responseText = app.get(targetUrl).text
+        val responseText = app.get(targetUrl, headers = APP_HEADERS).text
         val videoObj = tryParseJson<VideoPlayResponse>(responseText)?.episode ?: return false
         val videoMap = videoObj.videoUrl ?: return false
 
@@ -141,13 +159,20 @@ class ShortMax : MainAPI() {
         return true
     }
 
-    // --- STRUKTUR MODEL DATA KELAS ---
+    // --- STRUKTUR MODEL DATA KELAS (UPGRADED FOR MULTI-LEVEL PARSING) ---
     data class ShortPlayListResponse(
         @JsonProperty("status") val status: String? = null,
         @JsonProperty("page") val page: Int? = null,
         @JsonProperty("isEnd") val isEnd: Boolean? = null,
         @JsonProperty("total") val total: Int? = null,
-        @JsonProperty("results") val results: List<ShortPlayItem>? = null
+        @JsonProperty("results") val results: List<ShortPlayItem>? = null,
+        @JsonProperty("data") val data: NestedListDataHub? = null // Penanganan jika data dibungkus objek 'data'
+    )
+
+    data class NestedListDataHub(
+        @JsonProperty("results") val results: List<ShortPlayItem>? = null,
+        @JsonProperty("list") val list: List<ShortPlayItem>? = null,
+        @JsonProperty("isEnd") val isEnd: Boolean? = null
     )
 
     data class ShortPlayItem(
