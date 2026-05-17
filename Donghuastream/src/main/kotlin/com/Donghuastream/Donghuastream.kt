@@ -33,7 +33,7 @@ open class Donghuastream : MainAPI() {
         var context: android.content.Context? = null
     }
 
-    override var mainUrl = "https://donghuastream.cc"
+    override var mainUrl = "https://donghuastream.org"
     override var name = "Donghuastream"
     override val hasMainPage = true
     override var lang = "id"
