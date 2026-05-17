@@ -1,5 +1,5 @@
 // use an integer for version numbers
-version = 25
+version = 26
 
 cloudstream {
     description = "DutaMovie - Nonton film box office, series, dan serial TV subtitle Indonesia"
@@ -14,10 +14,12 @@ cloudstream {
      * 3: Beta only
      * */
     status = 1 // will be 3 if unspecified
+    
+    // Sinkronisasi kategori utama penayangan
     tvTypes = listOf(
-        "AsianDrama",
-        "TvSeries",
         "Movie",
+        "TvSeries",
+        "AsianDrama",
         "Anime"
     )
 
