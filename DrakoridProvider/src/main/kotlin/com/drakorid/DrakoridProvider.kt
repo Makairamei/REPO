@@ -16,6 +16,7 @@ import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
+import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
@@ -35,7 +36,12 @@ class DrakoridProvider : MainAPI() {
     override var lang = "id"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.AsianDrama, TvType.TvSeries, TvType.Movie)
+
     private val cookieHeader = BuildConfig.DRAKORID_COOKIE.trim().takeIf { it.isNotBlank() }
+
+    // FIX #1: cookieMap is the single source of truth for cookies.
+    // Previously, cookies were sent BOTH via the "Cookie" header AND via the cookies map,
+    // causing duplicate cookie headers which can confuse servers.
     private val cookieMap: Map<String, String> by lazy {
         cookieHeader?.split(";")
             ?.mapNotNull { token ->
@@ -48,6 +54,7 @@ class DrakoridProvider : MainAPI() {
             ?.toMap()
             .orEmpty()
     }
+
     private val baseHeaders = mapOf(
         "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -66,7 +73,7 @@ class DrakoridProvider : MainAPI() {
         val url = "$mainUrl/${request.data}/$pageNo"
         val document = app.get(
             url,
-            headers = requestHeaders(),
+            headers = baseHeaders,
             cookies = requestCookies(),
             referer = mainUrl
         ).document
@@ -88,7 +95,7 @@ class DrakoridProvider : MainAPI() {
 
         val document = app.get(
             "$mainUrl/cari.html?q=$encoded",
-            headers = requestHeaders(),
+            headers = baseHeaders,
             cookies = requestCookies(),
             referer = mainUrl
         ).document
@@ -100,7 +107,7 @@ class DrakoridProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(
             url,
-            headers = requestHeaders(),
+            headers = baseHeaders,
             cookies = requestCookies(),
             referer = mainUrl
         ).document
@@ -190,11 +197,19 @@ class DrakoridProvider : MainAPI() {
             visitedPages.add("$mainUrl/watch-s$method/${linkData.slug}/${linkData.episode}")
         }
 
+        // FIX #2: Track whether ANY source was found (direct or via iframe extractor).
+        // Previously, return value depended only on directMediaUrls — so if only
+        // iframes were found and loaded, the function returned false (= CloudStream
+        // showed "No links found" even though videos were already loading).
+        var anySourceFound = false
+
         visitedPages.forEach { pageUrl ->
+            // FIX #4: Log errors instead of silently swallowing them.
+            // Previously, runCatching{} with no onFailure made debugging impossible.
             runCatching {
                 val document = app.get(
                     pageUrl,
-                    headers = requestHeaders(),
+                    headers = baseHeaders,
                     cookies = requestCookies(),
                     referer = "$mainUrl/nonton/${linkData.slug}/"
                 ).document
@@ -207,7 +222,10 @@ class DrakoridProvider : MainAPI() {
                     }
                     .forEach { embedUrl ->
                         loadExtractor(embedUrl, pageUrl, subtitleCallback, callback)
+                        anySourceFound = true
                     }
+            }.onFailure { e ->
+                e.printStackTrace()
             }
         }
 
@@ -225,21 +243,20 @@ class DrakoridProvider : MainAPI() {
                     this.referer = mainUrl
                 }
             )
+            anySourceFound = true
         }
 
-        return directMediaUrls.isNotEmpty()
+        return anySourceFound
     }
 
-    private fun requestHeaders(): Map<String, String> {
-        return if (cookieHeader == null) {
-            baseHeaders
-        } else {
-            baseHeaders + ("Cookie" to cookieHeader)
-        }
-    }
-
+    // FIX #1 (continued): requestHeaders() no longer injects "Cookie" into the headers map.
+    // Cookies are handled exclusively via requestCookies() → cookies parameter of app.get/post,
+    // which is the correct and non-duplicating approach.
     private fun requestCookies(): Map<String, String> = cookieMap
 
+    // FIX #3: toSearchResult() detects Movie vs Series from the URL.
+    // Previously, ALL results were tagged as AsianDrama — even film pages like /film-korea/.
+    // Now, URLs containing "/film" get TvType.Movie and use newMovieSearchResponse.
     private fun Element.toSearchResult(): SearchResponse? {
         val linkEl = this.selectFirst("a[href*=/nonton/], a[href*=/go/]") ?: return null
         val href = linkEl.attr("abs:href")
@@ -260,8 +277,16 @@ class DrakoridProvider : MainAPI() {
 
         val poster = this.selectFirst("img")?.attr("abs:src")?.trim()
 
-        return newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
-            this.posterUrl = poster
+        val isMovie = href.contains("/film", ignoreCase = true)
+
+        return if (isMovie) {
+            newMovieSearchResponse(title, href, TvType.Movie) {
+                this.posterUrl = poster
+            }
+        } else {
+            newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
+                this.posterUrl = poster
+            }
         }
     }
 
@@ -300,10 +325,10 @@ class DrakoridProvider : MainAPI() {
 
     private fun inferQuality(url: String): Int {
         return when {
-            url.contains("1080", true) -> 1080
-            url.contains("720", true) -> 720
-            url.contains("480", true) -> 480
-            url.contains("360", true) -> 360
+            url.contains("1080", true) -> Qualities.P1080.value
+            url.contains("720", true) -> Qualities.P720.value
+            url.contains("480", true) -> Qualities.P480.value
+            url.contains("360", true) -> Qualities.P360.value
             else -> Qualities.Unknown.value
         }
     }
