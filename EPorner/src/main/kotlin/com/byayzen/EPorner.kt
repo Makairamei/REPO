@@ -78,6 +78,8 @@ class EPorner : MainAPI() {
                 """"(\d{3,4}p)[^"]*"\s*:\s*\{\s*"labelShort"\s*:\s*"[^"]*"\s*,\s*"src"\s*:\s*"([^"]+)"""".toRegex()
                     .findAll(responseText).forEach { match ->
                         val videoUrl = match.groupValues[2]
+                        val rawQuality = match.groupValues[1] // Contoh: "1080p"
+                        
                         if (!videoUrl.contains("/dload/")) {
                             callback.invoke(
                                 newExtractorLink(
@@ -87,7 +89,8 @@ class EPorner : MainAPI() {
                                     type = ExtractorLinkType.VIDEO
                                 ) {
                                     this.referer = "https://www.eporner.com/"
-                                    this.quality = AppUtils.getQualityFromName(match.groupValues[1])
+                                    // BYPASS TOTAL: Ambil angkanya doang (1080) pakai Kotlin murni, gak butuh API CloudStream!
+                                    this.quality = rawQuality.replace(Regex("\\D"), "").toIntOrNull() ?: 0
                                 }
                             )
                             videoFound = true
