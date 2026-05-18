@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
+import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.MainPageData
@@ -44,7 +45,7 @@ class InternetArchiveProvider : MainAPI() {
     override var lang = "en"
     override val hasMainPage = true
 
-    // Menambahkan deretan kategori bawaan langsung dari library koleksi Internet Archive
+    // List kategori beranda yang mengambil koleksi dari Internet Archive
     override val mainPage = listOf(
         MainPageData("Feature Films", "mediatype:(movies) AND collection:(feature_films)"),
         MainPageData("Anime & Animation", "mediatype:(movies) AND (anime OR animation)"),
@@ -67,7 +68,6 @@ class InternetArchiveProvider : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         return try {
-            // Memanfaatkan parameter data query dinamis dari list mainPage di atas
             val query = request.data
             val responseText = app.get("$mainUrl/advancedsearch.php?q=${query.encodeUri()}&fl[]=identifier&fl[]=title&fl[]=mediatype&rows=26&page=$page&output=json").text
             val featured = tryParseJson<SearchResult>(responseText)
