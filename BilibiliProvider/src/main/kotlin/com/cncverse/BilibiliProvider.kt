@@ -111,7 +111,6 @@ class BilibiliProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        BilibiliProvider.context?.let { StarPopupHelper.showStarPopupIfNeeded(it) }
         val home = mutableListOf<SearchResponse>()
         
         try {

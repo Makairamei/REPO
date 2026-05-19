@@ -46,7 +46,6 @@ open class Donghuastream : MainAPI() {
     ): HomePageResponse {
 
         context?.let {
-            StarPopupHelper.showStarPopupIfNeeded(it)
         }
 
         val document = app.get(
