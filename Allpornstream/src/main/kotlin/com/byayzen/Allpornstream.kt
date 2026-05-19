@@ -132,8 +132,10 @@ class Allpornstream : MainAPI() {
         val poster = Regex("""poster="(.*?)"""").find(res)?.groupValues?.get(1) ?: ""
         val plot = Regex("""<p>(.*?)</p>""").find(res)?.groupValues?.get(1) ?: ""
         val duration = Regex("""duration="(.*?)"""").find(res)?.groupValues?.get(1) ?: ""
+        
+        // Perbaikan: Pastikan tahun dikonversi dengan aman ke Int
         val yearString = Regex("""year="(.*?)"""").find(res)?.groupValues?.get(1)
-        val year = yearString?.toIntOrNull() ?: 0
+        val year: Int = yearString?.toIntOrNull() ?: 0
 
         val tags = Regex("""categories":\[(.*?)]""").find(res)?.groupValues?.get(1)
             ?.split(",")?.map { it.trim().removeSurrounding("\"") }
@@ -169,12 +171,15 @@ class Allpornstream : MainAPI() {
             .toList()
 
         links.forEach { link ->
+            // Perbaikan: Menggunakan constructor ExtractorLink standar
             callback.invoke(
-                newExtractorLink(
+                ExtractorLink(
+                    this.name,
                     this.name,
                     link,
                     this.mainUrl,
-                    Qualities.Unknown.value
+                    Qualities.Unknown.value,
+                    false
                 )
             )
         }
