@@ -5,6 +5,11 @@ version = 4
 
 
 android {
+    // FIX #1: namespace was missing — without this, BuildConfig is generated in an
+    // unknown package and every "import com.phisher98.BuildConfig" fails with
+    // "Unresolved reference 'phisher98'" across all files.
+    namespace = "com.phisher98"
+
     buildFeatures {
         buildConfig = true
         viewBinding = true

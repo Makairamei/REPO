@@ -5,11 +5,14 @@ import androidx.appcompat.app.AppCompatActivity
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.setKey
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
-// FIX #3: Replaced Plugin with BasePlugin.
-// In newer CloudStream3 builds, Plugin is removed/deprecated and causes
-// "Unresolved reference: Plugin". BasePlugin supports both load() and
-// load(context: Context) overrides, so the settings UI still works correctly.
-import com.lagradost.cloudstream3.plugins.BasePlugin
+// FIX #3: Reverted BasePlugin → Plugin.
+// Plugin is the correct base class here because:
+//   - Plugin exposes "resources" (needed by BottomFragment to load layouts/drawables)
+//   - Plugin exposes "openSettings" (needed to show the settings bottom sheet)
+//   - Plugin has load(context: Context) — BasePlugin only has load() without context
+// Changing to BasePlugin caused "overrides nothing", "Unresolved reference: resources",
+// and "Unresolved reference: openSettings" across BottomSheet.kt and MoontvPlugin.kt.
+import com.lagradost.cloudstream3.plugins.Plugin
 
 enum class ServerList(val link: Pair<String, Boolean>) {
     Moontv("https://moontv.to" to true),
@@ -18,7 +21,7 @@ enum class ServerList(val link: Pair<String, Boolean>) {
 }
 
 @CloudstreamPlugin
-class MoontvPlugin : BasePlugin() {
+class MoontvPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(Moontv())
         registerExtractorAPI(MegaUp())

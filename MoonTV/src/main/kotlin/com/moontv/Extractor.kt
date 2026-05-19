@@ -5,10 +5,10 @@ import com.lagradost.api.Log
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.newSubtitleFile
+// FIX #2: parsedSafe is NOT inside AppUtils in this CS3 version — importing it from
+// AppUtils fails with "Unresolved reference". Instead, use tryParseJson<T>(response.text)
+// which is available as a top-level function via AppUtils.tryParseJson import.
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
-// FIX #2: parsedSafe is a member of the AppUtils object — wildcard import does NOT
-// resolve it. Must be imported explicitly or calls like .parsedSafe<T>() won't compile.
-import com.lagradost.cloudstream3.utils.AppUtils.parsedSafe
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper
@@ -45,8 +45,7 @@ open class MegaUp : ExtractorApi() {
     companion object {
         private val HEADERS = mapOf(
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0",
-            // FIX #5: Was "*//*" — the double slash makes this a malformed Accept value.
-            // Correct wildcard media type is "*/*".
+            // FIX: Was "*//*" — correct wildcard media type is "*/*" (no double slash).
             "Accept" to "text/html, */*; q=0.01",
             "Accept-Language" to "en-US,en;q=0.5",
             "Sec-GPC" to "1",
@@ -69,9 +68,11 @@ open class MegaUp : ExtractorApi() {
         val mediaUrl = url.replace("/e/", "/media/").replace("/e2/", "/media/")
         val displayName = referer ?: this.name
 
-        val encodedResult = app.get(mediaUrl, headers = HEADERS)
-            .parsedSafe<YflixResponse>()
-            ?.result
+        // FIX #2: Replaced .parsedSafe<T>() with tryParseJson<T>(response.text).
+        // parsedSafe is not importable from AppUtils in this CS3 version.
+        val encodedResult = tryParseJson<YflixResponse>(
+            app.get(mediaUrl, headers = HEADERS).text
+        )?.result
 
         if (encodedResult == null) return
 
@@ -103,10 +104,7 @@ open class MegaUp : ExtractorApi() {
                 val firstSourceObj = sources.optJSONObject(0)
                 val m3u8File = when {
                     firstSourceObj != null -> firstSourceObj.optString("file").takeIf { it.isNotBlank() }
-                    else -> {
-                        val maybeString = sources.optString(0)
-                        maybeString.takeIf { it.isNotBlank() }
-                    }
+                    else -> sources.optString(0).takeIf { it.isNotBlank() }
                 }
                 if (m3u8File != null) {
                     M3u8Helper.generateM3u8(displayName, m3u8File, mainUrl).forEach(callback)

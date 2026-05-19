@@ -25,10 +25,11 @@ import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.toNewSearchResponseList
-// FIX #2: parsedSafe is a member of the AppUtils object — wildcard import does NOT
-// resolve it. Must be imported explicitly or .parsedSafe<T>() calls won't compile.
-import com.lagradost.cloudstream3.utils.AppUtils.parsedSafe
-import com.lagradost.cloudstream3.utils.AppUtils.toJson
+// FIX #2: Replaced parsedSafe import with tryParseJson.
+// parsedSafe cannot be imported from AppUtils in this CS3 version — it resolves
+// as "Unresolved reference" even with an explicit import. Use tryParseJson<T>(resp.text)
+// which is a stable top-level function available in all CS3 versions.
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.phisher98.BuildConfig
@@ -62,9 +63,7 @@ class Moontv : MainAPI() {
         val href = fixUrl(this.select("a.poster").attr("href"))
         val title = this.select(".title").text()
         val posterUrl = this.selectFirst("a.poster img")?.let {
-            fixUrl(
-                it.attr("data-src").ifBlank { it.attr("src") }
-            )
+            fixUrl(it.attr("data-src").ifBlank { it.attr("src") })
         }
         val quality = this.select("div.quality").text()
         return newMovieSearchResponse(title, href, TvType.Movie) {
@@ -107,10 +106,14 @@ class Moontv : MainAPI() {
         "$mainUrl/browser?type%5B%5D=movie&type%5B%5D=tv&sort=release_date" to "Latest Release"
     )
 
-    // FIX #1: quickSearch was calling search(query,1).items — ".items" does not exist
-    // on SearchResponseList. The correct property name is ".searchResponses".
-    override suspend fun quickSearch(query: String): List<SearchResponse> =
-        search(query, 1).searchResponses
+    // FIX #4: quickSearch was calling search(query,1).items then .searchResponses —
+    // both caused "Unresolved reference" because SearchResponseList property names
+    // vary between CS3 versions. Fixed by re-implementing the search directly,
+    // avoiding SearchResponseList property access entirely.
+    override suspend fun quickSearch(query: String): List<SearchResponse> {
+        val link = "$mainUrl/browser?keyword=$query&page=1"
+        return app.get(link).document.select("div.item").map { it.toSearchResult() }
+    }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
         val link = "$mainUrl/browser?keyword=$query&page=$page"
@@ -153,11 +156,12 @@ class Moontv : MainAPI() {
 
         val decoded = decode(dataId)
 
-        val api = app.get("$mainUrl/api/v1/titles/$dataId/episodes?_=$decoded")
-            .parsedSafe<ApiResponse>()
+        // FIX #2: Replaced .parsedSafe<T>() with tryParseJson<T>(resp.text).
+        val api = tryParseJson<ApiResponse>(
+            app.get("$mainUrl/api/v1/titles/$dataId/episodes?_=$decoded").text
+        )
 
         val title = api?.result?.title ?: return null
-
         val recommendations = document.select("div.item > div.inner").map { it.toSearchResult() }
 
         if (title.type == "movie") {
@@ -187,8 +191,6 @@ class Moontv : MainAPI() {
                 }.getOrNull()
             }
 
-            val movieCastList = parseCredits(movieCreditsJsonText)
-
             return newMovieLoadResponse(
                 title.title, url, TvType.Movie,
                 api.result.seasons?.firstOrNull()?.episodes?.firstOrNull()?.id
@@ -203,7 +205,7 @@ class Moontv : MainAPI() {
                 this.score = Score.from10(rating)
                 this.recommendations = recommendations
                 imdbIdFromMovie?.let { addImdbId(it) }
-                this.actors = movieCastList
+                this.actors = parseCredits(movieCreditsJsonText)
             }
         }
 
@@ -224,8 +226,6 @@ class Moontv : MainAPI() {
                 app.get("$TMDBAPI/tv/$id/credits?api_key=$TMDB_API_KEY&language=en-US").text
             }.getOrNull()
         }
-
-        val castList: List<ActorData> = parseCredits(showCreditsJsonText)
 
         val bgurl = runCatching {
             val json = app.get(
@@ -287,7 +287,7 @@ class Moontv : MainAPI() {
             this.score = Score.from10(rating)
             this.recommendations = recommendations
             addImdbId(imdbIdFromShow)
-            this.actors = castList
+            this.actors = parseCredits(showCreditsJsonText)
         }
     }
 
@@ -301,8 +301,11 @@ class Moontv : MainAPI() {
 
         return try {
             val decodetoken = decode(dataid)
-            val listResp = app.get("$mainUrl/api/v1/episodes/$dataid?_=$decodetoken")
-                .parsedSafe<LinksResponse>()
+
+            // FIX #2: Replaced .parsedSafe<T>() with tryParseJson<T>(resp.text).
+            val listResp = tryParseJson<LinksResponse>(
+                app.get("$mainUrl/api/v1/episodes/$dataid?_=$decodetoken").text
+            )
 
             val links = listResp?.result?.links
             if (links.isNullOrEmpty()) {
@@ -316,8 +319,9 @@ class Moontv : MainAPI() {
                     val serverName = server.name?.ifBlank { "Server" }
                     val linkToken = decode(lid)
 
-                    val linkResp = app.get("$mainUrl/api/v1/links/$lid?_=$linkToken")
-                        .parsedSafe<LinkDetailResponse>()
+                    val linkResp = tryParseJson<LinkDetailResponse>(
+                        app.get("$mainUrl/api/v1/links/$lid?_=$linkToken").text
+                    )
 
                     val result = linkResp?.result
                     if (result.isNullOrBlank()) {
@@ -344,10 +348,8 @@ class Moontv : MainAPI() {
                         return@forEach
                     }
 
-                    // FIX #4: Was loadExtractor(iframeUrl, displayName, ...) — passing the
-                    // display name string as the HTTP referer header. This caused the referer
-                    // to be a non-URL string instead of the site origin, breaking extractors
-                    // that validate the referer. Fixed to pass the actual site URL as referer.
+                    // FIX: Was loadExtractor(iframeUrl, displayName, ...) — display name
+                    // string was passed as HTTP referer. Fixed to use actual site URL.
                     loadExtractor(iframeUrl, "$mainUrl/", subtitleCallback, callback)
 
                 } catch (e: Exception) {
@@ -379,9 +381,7 @@ class Moontv : MainAPI() {
             val item = results.optJSONObject(i) ?: continue
             if (item.optString("media_type") != targetType) continue
             val resultTitle = if (isMovie) item.optString("title") else item.optString("name")
-            if (resultTitle.equals(title, ignoreCase = true)) {
-                return item.optInt("id")
-            }
+            if (resultTitle.equals(title, ignoreCase = true)) return item.optInt("id")
         }
         return null
     }
@@ -393,13 +393,12 @@ class Moontv : MainAPI() {
         val castArr = root.optJSONArray("cast") ?: return list
         for (i in 0 until castArr.length()) {
             val c = castArr.optJSONObject(i) ?: continue
-            val name = c.optString("name").takeIf { it.isNotBlank() }
+            val actorName = c.optString("name").takeIf { it.isNotBlank() }
                 ?: c.optString("original_name").orEmpty()
             val profile = c.optString("profile_path").takeIf { it.isNotBlank() }
                 ?.let { "$TMDBIMAGEBASEURL$it" }
             val character = c.optString("character").takeIf { it.isNotBlank() }
-            val actor = Actor(name, profile)
-            list += ActorData(actor, roleString = character)
+            list += ActorData(Actor(actorName, profile), roleString = character)
         }
         return list
     }
