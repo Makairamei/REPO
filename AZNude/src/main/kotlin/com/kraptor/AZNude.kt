@@ -261,7 +261,7 @@ class AZNude : MainAPI() {
         val document = app.get(data, headers = browserHeaders).document
         val emitted = linkedSetOf<String>()
 
-        fun emitDirect(rawUrl: String?, label: String? = null) {
+        suspend fun emitDirect(rawUrl: String?, label: String? = null) {
             val videoUrl = rawUrl?.replace("\\/", "/")?.trim().absoluteUrl() ?: return
             if (!videoUrl.startsWith("http", true)) return
             if (!emitted.add(videoUrl)) return
@@ -293,31 +293,35 @@ class AZNude : MainAPI() {
             }
         }
 
-        document.select("video source[src], video[src], source[src]").forEach { source ->
+        for (source in document.select("video source[src], video[src], source[src]")) {
             emitDirect(source.attr("src"), source.attr("label").ifBlank { source.attr("res") })
         }
 
-        document.select("a[href*='.mp4'], a[href*='.m3u8'], a[href*='.webm']").forEach { anchor ->
+        for (anchor in document.select("a[href*='.mp4'], a[href*='.m3u8'], a[href*='.webm']")) {
             emitDirect(anchor.attr("href"), anchor.text())
         }
 
-        document.select("script").forEach { script ->
+        for (script in document.select("script")) {
             val scriptContent = script.html().ifBlank { script.data() }
 
-            extractJwSources(scriptContent).forEach { source ->
+            for (source in extractJwSources(scriptContent)) {
                 emitDirect(source.url, source.label)
             }
 
-            Regex("""(?i)(https?:\\?/\\?/[^"'<>\s]+?\.(?:m3u8|mp4|webm)(?:\?[^"'<>\s]*)?)""")
-                .findAll(scriptContent)
-                .forEach { match -> emitDirect(match.groupValues[1], null) }
+            for (match in Regex("""(?i)(https?:\\?/\\?/[^"'<>\s]+?\.(?:m3u8|mp4|webm)(?:\?[^"'<>\s]*)?)""").findAll(scriptContent)) {
+                emitDirect(match.groupValues[1], null)
+            }
         }
 
         if (emitted.isEmpty()) {
-            document.select("iframe[src], iframe[data-src]").forEach { iframe ->
-                val iframeUrl = iframe.getIframeAttr().absoluteUrl() ?: return@forEach
-                runCatching { loadExtractor(iframeUrl, data, subtitleCallback, callback) }
-                    .onSuccess { emitted.add(iframeUrl) }
+            for (iframe in document.select("iframe[src], iframe[data-src]")) {
+                val iframeUrl = iframe.getIframeAttr().absoluteUrl() ?: continue
+                try {
+                    loadExtractor(iframeUrl, data, subtitleCallback, callback)
+                    emitted.add(iframeUrl)
+                } catch (_: Exception) {
+                    // Skip broken iframe extractor.
+                }
             }
         }
 
