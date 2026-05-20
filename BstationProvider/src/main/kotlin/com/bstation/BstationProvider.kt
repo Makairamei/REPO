@@ -43,18 +43,54 @@ class BstationProvider : MainAPI() {
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
     )
 
+    override val hasDownloadSupport = true
+
     override val mainPage = mainPageOf(
+        "timeline" to "Update Terbaru",
         "anime" to "Anime Indonesia",
+        "search:anime" to "Anime",
+        "search:movie" to "Film Anime",
+        "search:drama" to "Drama",
+        "search:series" to "Serial",
+        "search:action" to "Aksi",
+        "search:adventure" to "Petualangan",
+        "search:comedy" to "Komedi",
+        "search:romance" to "Romantis",
+        "search:fantasy" to "Fantasi",
+        "search:isekai" to "Isekai",
+        "search:sci-fi" to "Fiksi Ilmiah",
+        "search:thriller" to "Thriller",
+        "search:horror" to "Horor",
+        "search:mystery" to "Misteri",
+        "search:slice of life" to "Slice of Life",
+        "search:school" to "Sekolah",
+        "search:sports" to "Olahraga",
+        "search:music" to "Musik",
+        "search:supernatural" to "Supernatural",
+        "search:donghua" to "Donghua",
+        "search:indonesia" to "Subtitle Indonesia",
+        "search:dub indonesia" to "Dub Indonesia",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        if (page != 1) return newHomePageResponse(HomePageList(request.name, emptyList()), hasNext = false)
+        if (page != 1) {
+            return newHomePageResponse(HomePageList(request.name, emptyList()), hasNext = false)
+        }
 
-        val timelineResults = fetchTimelineApi(40)
-        val fallbackResults = if (timelineResults.isEmpty()) fetchAnimePageFallback(40) else emptyList()
+        val items = when {
+            request.data == "timeline" -> fetchTimelineApi(40).ifEmpty { fetchAnimePageFallback(40) }
+            request.data == "anime" -> fetchTimelineApi(40).ifEmpty { fetchAnimePageFallback(40) }
+            request.data.startsWith("search:") -> {
+                val keyword = request.data.removePrefix("search:").trim()
+                fetchSearchApi(keyword, 40).ifEmpty {
+                    fetchTimelineApi(120).filter { it.name.contains(keyword, ignoreCase = true) }.take(40)
+                }
+            }
+            else -> fetchSearchApi(request.data, 40).ifEmpty { fetchAnimePageFallback(40) }
+        }.distinctBy { it.url }
 
         return newHomePageResponse(
-            HomePageList(request.name, (timelineResults + fallbackResults).distinctBy { it.url }),
+            HomePageList(request.name, items),
             hasNext = false
         )
     }
@@ -109,7 +145,7 @@ class BstationProvider : MainAPI() {
                 posterUrl = season?.verticalCover?.normalizeUrl() ?: legacySeason?.cover?.normalizeUrl()
                 backgroundPosterUrl = season?.horizontalCover?.normalizeUrl()
                 plot = season?.description ?: legacySeason?.evaluate
-                tags = season?.styles.orEmpty().mapNotNull { style -> style.title }.distinct()
+                tags = season?.styles.orEmpty().mapNotNull { style -> style.title?.translateGenre() }.distinct()
                 year = season?.playerDate?.extractYear()
                 showStatus = when (season?.isFinished) {
                     true -> ShowStatus.Completed
@@ -145,6 +181,8 @@ class BstationProvider : MainAPI() {
         if (episodeData.watchUrl.isBlank()) return false
 
         var hasLinks = false
+        val emittedLinks = linkedSetOf<String>()
+
         fetchSubtitleData(episodeData.episodeId).forEach { sub ->
             val subtitleUrl = (sub.srt?.url ?: sub.ass?.url).orEmpty().normalizeUrl()
             if (subtitleUrl.isBlank()) return@forEach
@@ -513,6 +551,31 @@ class BstationProvider : MainAPI() {
             32 -> Qualities.P360.value
             16, 15, 6 -> Qualities.P240.value
             else -> Qualities.Unknown.value
+        }
+    }
+
+    private fun String.translateGenre(): String {
+        return when (trim().lowercase()) {
+            "action", "aksi" -> "Aksi"
+            "adventure", "petualangan" -> "Petualangan"
+            "anime" -> "Anime"
+            "comedy", "komedi" -> "Komedi"
+            "drama" -> "Drama"
+            "fantasy", "fantasi" -> "Fantasi"
+            "horror", "horor" -> "Horor"
+            "isekai" -> "Isekai"
+            "movie", "movies", "film" -> "Film"
+            "mystery", "misteri" -> "Misteri"
+            "romance", "romantis" -> "Romantis"
+            "school", "school life", "sekolah" -> "Sekolah"
+            "sci-fi", "science fiction", "fiksi ilmiah" -> "Fiksi Ilmiah"
+            "slice of life" -> "Slice of Life"
+            "sports", "olahraga" -> "Olahraga"
+            "music", "musik" -> "Musik"
+            "supernatural" -> "Supernatural"
+            "thriller" -> "Thriller"
+            "donghua" -> "Donghua"
+            else -> trim()
         }
     }
 

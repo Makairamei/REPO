@@ -25,7 +25,7 @@ android {
 
 cloudstream {
     language = "id"
-    description = "Provider anime Bstation region Indonesia"
+    description = "Provider anime Bstation region Indonesia dengan kategori Indonesia dan dukungan cookie opsional"
     authors = listOf("BetbetMiro")
     status = 1
     tvTypes = listOf(
