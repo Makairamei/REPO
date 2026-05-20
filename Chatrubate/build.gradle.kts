@@ -3,7 +3,7 @@ version = 5
 cloudstream {
     authors = listOf("BetbetMiro")
     language = "id"
-    description = "Provider NSFW untuk konten live cam dewasa dari Chaturbate."
+    description = "Provider NSFW untuk konten livecam dewasa dari Chaturbate."
 
     /**
      * Status int:
