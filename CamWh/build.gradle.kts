@@ -1,9 +1,9 @@
-version = 6
+version = 5
 
 cloudstream {
     authors = listOf("BetbetMiro")
     language = "id"
-    description = "Provider NSFW untuk konten video dewasa dari CamWH."
+    description = "Provider NSFW untuk konten live cam dewasa dari Chaturbate."
 
     /**
      * Status int:
@@ -14,5 +14,5 @@ cloudstream {
      */
     status = 1
     tvTypes = listOf("NSFW")
-    iconUrl = "https://camwh.com/contents/ugmtofwqltgh/theme/logo.png"
+    iconUrl = "https://web.static.mmcdn.com/favicons/apple-touch-icon-120x120.png?hash=b494063e083a"
 }
