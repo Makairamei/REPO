@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 import java.net.URLDecoder
 import java.net.URLEncoder
+import kotlinx.coroutines.runBlocking
 
 class CamWh : MainAPI() {
     override var mainUrl = "https://camwh.com"
@@ -22,31 +23,45 @@ class CamWh : MainAPI() {
         "$mainUrl/latest-updates/" to "Update Terbaru",
         "$mainUrl/top-rated/" to "Rating Tertinggi",
         "$mainUrl/most-popular/" to "Paling Dilihat",
-        "$mainUrl/categories/anal/" to "Kategori Anal",
-        "$mainUrl/categories/blowjob/" to "Kategori Oral",
-        "$mainUrl/categories/boobs/" to "Kategori Boobs",
-        "$mainUrl/categories/lesbian/" to "Kategori Lesbian",
-        "$mainUrl/categories/masturbation/" to "Kategori Solo",
-        "$mainUrl/categories/public/" to "Kategori Public",
-        "$mainUrl/categories/webcam/" to "Kategori Webcam",
-        "$mainUrl/tags/solo/" to "Solo",
-        "$mainUrl/tags/webcam/" to "Webcam",
-        "$mainUrl/tags/blonde/" to "Blonde",
-        "$mainUrl/tags/brunette/" to "Brunette",
-        "$mainUrl/tags/big-tits/" to "Big Tits",
-        "$mainUrl/tags/amateur/" to "Amateur"
+
+        // Pakai route search internal supaya kategori tidak kosong / cuma tampil sebagai teks.
+        // Beberapa halaman /categories/ di CamWh sering tidak mengembalikan card video untuk Cloudstream.
+        "search:anal" to "Kategori Anal",
+        "search:oral" to "Kategori Oral",
+        "search:boobs" to "Kategori Boobs",
+        "search:lesbian" to "Kategori Lesbian",
+        "search:solo" to "Kategori Solo",
+        "search:public" to "Kategori Public",
+        "search:webcam" to "Kategori Webcam",
+        "search:blonde" to "Blonde",
+        "search:brunette" to "Brunette",
+        "search:big tits" to "Big Tits",
+        "search:amateur" to "Amateur",
+        "search:asian" to "Asian",
+        "search:cosplay" to "Cosplay",
+        "search:hd" to "HD"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get(
-            buildPagedUrl(request.data, page),
-            headers = defaultHeaders,
-            referer = "$mainUrl/"
-        ).document
+        val items = if (request.data.startsWith("search:")) {
+            val keyword = request.data.removePrefix("search:").trim()
+            fetchSearchItems(keyword, page)
+        } else {
+            val document = app.get(
+                buildPagedUrl(request.data, page),
+                headers = defaultHeaders,
+                referer = "$mainUrl/"
+            ).document
 
-        val items = document.select("div.item, .list-videos .item, .thumb, .video-item")
-            .mapNotNull { it.toSearchResult() }
-            .distinctBy { it.url }
+            val parsedItems = document.select(cardSelector)
+                .mapNotNull { it.toSearchResult() }
+                .distinctBy { it.url }
+
+            // Kalau halaman kategori/tag kosong, jangan biarkan Cloudstream cuma menampilkan judul kategori sebagai teks.
+            parsedItems.ifEmpty {
+                fetchSearchItems(request.name.cleanCategoryKeyword(), page)
+            }
+        }
 
         return newHomePageResponse(
             HomePageList(request.name, items, isHorizontalImages = true),
@@ -61,7 +76,15 @@ class CamWh : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
-        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val results = fetchSearchItems(query, page)
+        return newSearchResponseList(results, hasNext = results.isNotEmpty())
+    }
+
+    private suspend fun fetchSearchItems(query: String, page: Int): List<SearchResponse> {
+        val cleanQuery = query.cleanCategoryKeyword()
+        if (cleanQuery.isBlank()) return emptyList()
+
+        val encodedQuery = URLEncoder.encode(cleanQuery, "UTF-8")
         val searchUrl = "$mainUrl/search/$encodedQuery/?mode=async&function=get_block&block_id=list_videos_videos_list_search_result&q=$encodedQuery&category_ids=&sort_by=&from_videos=$page&from_albums=1"
 
         val document = app.get(
@@ -70,11 +93,9 @@ class CamWh : MainAPI() {
             referer = "$mainUrl/search/$encodedQuery/"
         ).document
 
-        val results = document.select("div.item, .list-videos .item, .thumb, .video-item")
+        return document.select(cardSelector)
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
-
-        return newSearchResponseList(results, hasNext = results.isNotEmpty())
     }
 
     override suspend fun load(url: String): LoadResponse {
@@ -118,7 +139,7 @@ class CamWh : MainAPI() {
             .filter { it.isNotBlank() }
             .distinct()
 
-        val recommendations = document.select("div.list-videos div.item, .related-videos div.item")
+        val recommendations = document.select(cardSelector)
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
@@ -139,7 +160,7 @@ class CamWh : MainAPI() {
     ): Boolean {
         val emitted = linkedSetOf<String>()
 
-        suspend fun emitDirect(rawUrl: String?, label: String = name) {
+        fun emitDirect(rawUrl: String?, label: String = name) {
             val videoUrl = rawUrl
                 ?.decodeEscapedUrl()
                 ?.takeIf { it.isNotBlank() }
@@ -147,21 +168,23 @@ class CamWh : MainAPI() {
 
             if (!emitted.add(videoUrl)) return
 
-            callback.invoke(
-                newExtractorLink(
-                    source = name,
-                    name = label,
-                    url = videoUrl,
-                    type = inferType(videoUrl)
-                ) {
-                    this.referer = data
-                    this.quality = getQualityFromName(label)
-                    this.headers = streamHeaders(data)
-                }
-            )
+            runBlocking {
+                callback.invoke(
+                    newExtractorLink(
+                        source = name,
+                        name = label,
+                        url = videoUrl,
+                        type = inferType(videoUrl)
+                    ) {
+                        this.referer = data
+                        this.quality = getQualityFromName(label)
+                        this.headers = streamHeaders(data)
+                    }
+                )
+            }
         }
 
-        suspend fun extractFromHtml(html: String) {
+        fun extractFromHtml(html: String) {
             val patterns = listOf(
                 Regex("""video_alt_url\d*\s*[:=]\s*['"]([^'"]+)""", RegexOption.IGNORE_CASE),
                 Regex("""video_url\d*\s*[:=]\s*['"]([^'"]+)""", RegexOption.IGNORE_CASE),
@@ -187,7 +210,7 @@ class CamWh : MainAPI() {
 
         extractFromHtml(response.text)
 
-        for (element in document.select("video source[src], video[src], source[src]")) {
+        document.select("video source[src], video[src], source[src]").forEach { element ->
             emitDirect(element.attr("src"), "$name - Video")
         }
 
@@ -201,7 +224,6 @@ class CamWh : MainAPI() {
                 try {
                     loadExtractor(fixUrl(iframeUrl), data, subtitleCallback, callback)
                 } catch (_: Exception) {
-                    // Ignore broken iframe fallback and continue direct extraction.
                 }
             }
         }
@@ -247,19 +269,23 @@ class CamWh : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val anchor = selectFirst("a[href]") ?: return null
         val title = anchor.attr("title").trim()
-            .ifBlank { selectFirst(".title, strong, .video-title")?.text()?.trim().orEmpty() }
+            .ifBlank { selectFirst(".title, strong, .video-title, .thumb-title, .item-title")?.text()?.trim().orEmpty() }
             .ifBlank { selectFirst("img")?.attr("alt")?.trim().orEmpty() }
+            .ifBlank { anchor.text().trim() }
 
         if (title.isBlank()) return null
 
         val href = fixUrlNull(anchor.attr("href")) ?: return null
         val img = selectFirst("img")
         val poster = fixUrlNull(
-            img?.attr("data-original")
-                ?.takeIf { it.isNotBlank() }
+            img?.attr("data-original")?.takeIf { it.isNotBlank() }
                 ?: img?.attr("data-webp")?.takeIf { it.isNotBlank() }
                 ?: img?.attr("data-src")?.takeIf { it.isNotBlank() }
-                ?: img?.attr("src")
+                ?: img?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
+                ?: img?.attr("data-thumb")?.takeIf { it.isNotBlank() }
+                ?: img?.attr("srcset")?.firstSrcSetUrl()
+                ?: img?.attr("src")?.takeIf { it.isNotBlank() }
+                ?: attr("style").extractCssImageUrl()
         )
 
         return newMovieSearchResponse(title, href, TvType.NSFW) {
@@ -301,6 +327,45 @@ class CamWh : MainAPI() {
                 runCatching { URLDecoder.decode(value, "UTF-8") }.getOrDefault(value)
             }
     }
+
+    private fun String.cleanCategoryKeyword(): String {
+        return lowercase()
+            .replace("kategori", "")
+            .replace("terbaru", "")
+            .replace("rating tertinggi", "")
+            .replace("paling dilihat", "")
+            .replace("big tits", "big tits")
+            .trim()
+            .ifBlank { this.trim() }
+    }
+
+    private fun String.firstSrcSetUrl(): String? {
+        return split(",")
+            .firstOrNull()
+            ?.trim()
+            ?.substringBefore(" ")
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun String.extractCssImageUrl(): String? {
+        return Regex("""url\((['"]?)(.*?)\1\)""", RegexOption.IGNORE_CASE)
+            .find(this)
+            ?.groupValues
+            ?.getOrNull(2)
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private val cardSelector = listOf(
+        "div.item",
+        ".list-videos .item",
+        ".thumb",
+        ".video-item",
+        ".item-video",
+        ".video",
+        ".video-card",
+        ".cards .card",
+        "li.video"
+    ).joinToString(",")
 
     private fun translateTag(tag: String): String {
         return when (tag.lowercase()) {
