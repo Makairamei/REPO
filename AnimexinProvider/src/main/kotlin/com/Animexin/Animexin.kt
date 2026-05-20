@@ -11,9 +11,8 @@ class Animexin : MainAPI() {
     override val hasMainPage          = true
     override var lang                 = "id"
     override val hasDownloadSupport   = true
-    override val supportedTypes       = setOf(TvType.Movie,TvType.Anime)
+    override val supportedTypes       = setOf(TvType.Movie, TvType.Anime)
 
-    // Kategori diperbarui: "Anime (RAW)" dihapus, Genre ditambahkan
     override val mainPage = mainPageOf(
         "anime/?status=ongoing&order=update" to "Recently Updated",
         "anime/?status=ongoing&order&order=popular" to "Popular",
@@ -30,7 +29,12 @@ class Animexin : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val link = if (request.data.contains("genres")) "$mainUrl/${request.data}page/$page" else "$mainUrl/${request.data}&page=$page"
+        val link = if (request.data.contains("genres")) {
+            "$mainUrl/${request.data}page/$page"
+        } else {
+            "$mainUrl/${request.data}&page=$page"
+        }
+        
         val document = app.get(link).documentLarge
         val home     = document.select("div.listupd > article").mapNotNull { it.toSearchResult() }
 
@@ -53,45 +57,72 @@ class Animexin : MainAPI() {
         }
     }
 
-    override suspend fun search(query: String,page: Int): SearchResponseList {
+    override suspend fun search(query: String, page: Int): SearchResponseList {
         val document = app.get("${mainUrl}/page/$page/?s=$query").documentLarge
         return document.select("div.listupd > article").mapNotNull { it.toSearchResult() }.toNewSearchResponseList()
     }
 
+    @Suppress("SuspiciousIndentation")
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).documentLarge
         val title = document.selectFirst("h1.entry-title")?.text()?.trim().toString()
+        val href = document.selectFirst("div.eplister > ul > li a")?.attr("href") ?: ""
         val poster = document.select("div.thumb img").attr("src").ifEmpty { document.selectFirst("meta[property=og:image]")?.attr("content")?.trim().toString() }
         val description = document.selectFirst("div.entry-content")?.text()?.trim()
+        val type = document.selectFirst(".spe")?.text().toString()
+        val tvtag = if (type.contains("Movie")) TvType.Movie else TvType.TvSeries
         
-        // Memperbaiki deteksi episode agar lebih stabil
-        val episodes = document.select("div.eplister > ul > li").map { info ->
-            val href1 = info.select("a").attr("href")
-            val epText = info.selectFirst("div.epl-num")?.text().orEmpty()
-            val epnum = Regex("(\\d+)").find(epText)?.groupValues?.get(1)?.toIntOrNull()
+        return if (tvtag == TvType.TvSeries) {
+            val episodeRegex = Regex("(\\d+)")
 
-            newEpisode(href1) {
-                this.episode = epnum
-                this.name = epnum?.let { "Episode $it" } ?: epText
+            val episodes = document.select("div.eplister > ul > li").map { info ->
+                val href1 = info.select("a").attr("href")
+                val posterr = info.selectFirst("a img")?.attr("src") ?: ""
+
+                val epText = info.selectFirst("div.epl-num")?.text().orEmpty()
+                val epnum = episodeRegex.find(epText)?.groupValues?.get(1)?.toIntOrNull()
+
+                newEpisode(href1) {
+                    this.episode = epnum
+                    this.name = epnum?.let { "Episode $it" } ?: epText
+                    this.posterUrl = posterr
+                }
             }
-        }
 
-        return newTvSeriesLoadResponse(title, url, TvType.Anime, episodes.reversed()) {
-            this.posterUrl = poster
-            this.plot = description
+            newTvSeriesLoadResponse(title, url, TvType.Anime, episodes.reversed()) {
+                this.posterUrl = poster
+                this.plot = description
+            }
+        } else {
+            newMovieLoadResponse(title, url, TvType.Movie, href) {
+                this.posterUrl = poster
+                this.plot = description
+            }
         }
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val document = app.get(data).documentLarge
-        // Menambahkan pengecekan apakah elemen ditemukan untuk menghindari crash
-        document.select(".mobius option").forEach { server ->
-            val base64 = server.attr("value")
-            if (base64.isNotEmpty()) {
-                val decoded = base64Decode(base64)
-                val doc = Jsoup.parse(decoded)
-                val href = doc.select("iframe").attr("src")
-                if (href.isNotEmpty()) {
+        val servers = document.select(".mobius option")
+        
+        if (servers.isNotEmpty()) {
+            servers.forEach { server ->
+                val base64 = server.attr("value")
+                if (base64.isNotBlank()) {
+                    val decoded = base64Decode(base64)
+                    val doc = Jsoup.parse(decoded)
+                    val href = doc.select("iframe").attr("src")
+                    if (href.isNotBlank()) {
+                        val url = Http(href)
+                        loadExtractor(url, subtitleCallback, callback)
+                    }
+                }
+            }
+        } else {
+            // Fallback untuk judul yang tidak memakai base64 (biasanya tag iframe langsung di HTML)
+            document.select("div.player-area iframe, iframe").forEach { iframe ->
+                val href = iframe.attr("src")
+                if (href.isNotBlank()) {
                     val url = Http(href)
                     loadExtractor(url, subtitleCallback, callback)
                 }
