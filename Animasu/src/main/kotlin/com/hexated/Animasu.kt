@@ -13,7 +13,7 @@ import org.jsoup.nodes.Element
 class Animasu : MainAPI() {
 
     override var mainUrl = "https://v0.animasu.app"
-    override var name = "Animasu"
+    override var name = "Animasu😸"
     override val hasMainPage = true
     override var lang = "id"
     override val hasDownloadSupport = true
@@ -47,7 +47,7 @@ class Animasu : MainAPI() {
         }
     }
 
-    // === PERUBAHAN: MENAMBAHKAN DERETAN GENRE DI HALAMAN UTAMA ===
+    // === FIX: PARAMETER GENRE MENGGUNAKAN HURUF KECIL (SLUG) ===
     override val mainPage = mainPageOf(
         "urutan=update" to "Baru diupdate",
         "status=&tipe=&urutan=publikasi" to "Baru ditambahkan",
@@ -55,18 +55,18 @@ class Animasu : MainAPI() {
         "status=&tipe=&urutan=rating" to "Rating Tertinggi",
         "status=&tipe=Movie&urutan=update" to "Movie Terbaru",
         "status=&tipe=Movie&urutan=populer" to "Movie Terpopuler",
-        "genre[]=Action" to "Action",
-        "genre[]=Comedy" to "Comedy",
-        "genre[]=Romance" to "Romance",
-        "genre[]=Fantasy" to "Fantasy",
-        "genre[]=Drama" to "Drama",
-        "genre[]=Isekai" to "Isekai",
-        "genre[]=School" to "School",
-        "genre[]=Slice+of+Life" to "Slice of Life",
-        "genre[]=Mystery" to "Mystery",
-        "genre[]=Sci-Fi" to "Sci-Fi",
-        "genre[]=Supernatural" to "Supernatural",
-        "genre[]=Harem" to "Harem"
+        "genre[]=action" to "Action",
+        "genre[]=comedy" to "Comedy",
+        "genre[]=romance" to "Romance",
+        "genre[]=fantasy" to "Fantasy",
+        "genre[]=drama" to "Drama",
+        "genre[]=isekai" to "Isekai",
+        "genre[]=school" to "School",
+        "genre[]=slice-of-life" to "Slice of Life",
+        "genre[]=mystery" to "Mystery",
+        "genre[]=sci-fi" to "Sci-Fi",
+        "genre[]=supernatural" to "Supernatural",
+        "genre[]=harem" to "Harem"
     )
 
     override suspend fun getMainPage(
