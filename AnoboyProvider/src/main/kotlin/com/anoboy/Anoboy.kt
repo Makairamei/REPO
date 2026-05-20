@@ -8,13 +8,16 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import java.net.URI
+import java.net.URLEncoder
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 class Anoboy : MainAPI() {
-    override var mainUrl = "https://ww1.anoboy.boo"
+    override var mainUrl = "https://anoboy.be"
     override var name = "AnoBoy"
     override val hasMainPage = true
+    override val hasQuickSearch = true
+    override val hasDownloadSupport = true
     override var lang = "id"
 
     override val supportedTypes = setOf(
@@ -43,30 +46,67 @@ class Anoboy : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "" to "New Update",
-        "category/anime" to "Latest Added",
-        "category/live-action-movie" to "Live Action",
-        "category/anime-movie" to "Movie",
-        "category/donghua" to "Donghua"
+        "" to "Update Terbaru",
+        "anime/?order=update&status=&type=" to "Anime Terbaru",
+        "anime/?order=add&status=&type=" to "Baru Ditambahkan",
+        "anime/?order=&status=ongoing&type=" to "Sedang Tayang",
+        "anime/?order=&status=completed&type=" to "Tamat",
+        "anime/?order=&status=&type=movie" to "Movie",
+        "anime/?order=&status=&type=ova" to "OVA",
+        "genres/action/" to "Aksi",
+        "genres/adventure/" to "Petualangan",
+        "genres/comedy/" to "Komedi",
+        "genres/fantasy/" to "Fantasi",
+        "genres/isekai/" to "Isekai",
+        "genres/romance/" to "Romantis",
+        "genres/school/" to "Sekolah",
+        "genres/shounen/" to "Shounen",
+        "genres/slice-of-life/" to "Slice of Life"
     )
 
-    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val path = request.data.trim('/')
-        val url = if (page <= 1) {
-            if (path.isEmpty()) mainUrl else "$mainUrl/$path/"
+    private fun buildPageUrl(data: String, page: Int): String {
+        val raw = data.trim().trimStart('/')
+        if (raw.isBlank()) return if (page <= 1) mainUrl else "$mainUrl/page/$page/"
+
+        return if (raw.contains('?')) {
+            val path = raw.substringBefore('?').trim('/')
+            val query = raw.substringAfter('?')
+            if (page <= 1) "$mainUrl/$path/?$query" else "$mainUrl/$path/page/$page/?$query"
         } else {
-            if (path.isEmpty()) "$mainUrl/page/$page/" else "$mainUrl/$path/page/$page/"
+            val path = raw.trim('/')
+            if (page <= 1) "$mainUrl/$path/" else "$mainUrl/$path/page/$page/"
         }
+    }
+
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val url = buildPageUrl(request.data, page)
         val document = app.get(url).document
-        
-        val elements = document.select("a[href]:has(div.amv), a[href]:has(div#amv)")
-            .filterNot { it.parents().hasClass("side_home") }
-            
-        val items = elements.mapNotNull { it.toSearchResult() }
+
+        val primary = document.select(
+            "article.bs, div.bs, div.listupd article, div.listupd div.bs, " +
+                "a[href]:has(div.amv), a[href]:has(div#amv), .venz ul li, .latest a[href]"
+        ).filterNot { it.parents().hasClass("side_home") }
+
+        val fallback = if (primary.isNotEmpty()) primary else {
+            document.select("main a[href], .postbody a[href], .bixbox a[href]")
+                .filter { element ->
+                    val href = element.attr("href")
+                    val text = element.text()
+                    href.contains(mainUrl, true) &&
+                        !href.contains("/genres/", true) &&
+                        !href.contains("/season/", true) &&
+                        !href.contains("/studio/", true) &&
+                        text.length > 8
+                }
+        }
+
+        val items = fallback.mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
-            
-        val hasNext = document.selectFirst(".wp-pagenavi a.nextpostslink") != null
-            
+
+        val hasNext = document.selectFirst(
+            ".wp-pagenavi a.nextpostslink, a.next, a[rel=next], a[href*='/page/${page + 1}/']"
+        ) != null
+
         return newHomePageResponse(
             listOf(HomePageList(request.name, items, isHorizontalImages = true)),
             hasNext
@@ -78,9 +118,11 @@ class Anoboy : MainAPI() {
         if (link.isBlank()) return null
 
         val title = attr("title").trim().ifBlank {
-            selectFirst("h3.ibox1, h3.ibox")?.text()?.trim().orEmpty()
+            selectFirst("h3.ibox1, h3.ibox, h2, h3, .tt, .entry-title")?.text()?.trim().orEmpty()
         }.ifBlank {
             selectFirst("img")?.attr("alt")?.trim().orEmpty()
+        }.ifBlank {
+            text().trim()
         }
         if (title.isBlank()) return null
 
@@ -122,12 +164,16 @@ class Anoboy : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("$mainUrl/?s=$query").document
-        val modernResults = document.select("a[href]:has(div.amv), a[href]:has(div#amv)")
-            .mapNotNull { it.toSearchResult() }
-        if (modernResults.isNotEmpty()) return modernResults
-        return document.select("div.listupd article.bs")
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val document = app.get("$mainUrl/?s=$encodedQuery").document
+        val modernResults = document.select(
+            "article.bs, div.bs, div.listupd article, div.listupd div.bs, " +
+                "a[href]:has(div.amv), a[href]:has(div#amv), .venz ul li, .latest a[href]"
+        ).mapNotNull { it.toSearchResult() }
+        if (modernResults.isNotEmpty()) return modernResults.distinctBy { it.url }
+        return document.select("div.listupd article.bs, article.bs, div.bs")
             .mapNotNull { it.toLegacySearchResult() }
+            .distinctBy { it.url }
     }
 
     private fun Element.toRecommendResult(): SearchResponse? {
@@ -138,8 +184,8 @@ class Anoboy : MainAPI() {
         }
         if (href.isBlank()) return null
 
-        val title = selectFirst("h3.ibox1, h3.ibox")?.text()?.trim()
-            ?: selectFirst("div.tt")?.text()?.trim()
+        val title = selectFirst("h3.ibox1, h3.ibox, h2, h3, .entry-title")?.text()?.trim()
+            ?: selectFirst("div.tt, .tt")?.text()?.trim()
             ?: attr("title").trim().ifBlank { null }
             ?: return null
 
@@ -164,7 +210,7 @@ class Anoboy : MainAPI() {
 
         val title = document.selectFirst("h1.entry-title, h2.entry-title")?.text()?.trim().orEmpty()
         val poster = document
-            .selectFirst("div.column-three-fourth > img, div.column-content > img, div.bigcontent img, div.entry-content img")
+            .selectFirst("div.column-three-fourth > img, div.column-content > img, div.bigcontent img, div.entry-content img, .thumb img, .poster img, .info-content img")
             ?.getImageAttr()
             ?.let { fixUrlNull(it) }
 
@@ -222,13 +268,19 @@ class Anoboy : MainAPI() {
             ?.attr("src")
         val status = getStatus(getTableValue("Status"))
 
-        val recommendations = document.select("a[href]:has(div.amv), a[href]:has(div#amv), div.listupd article.bs")
+        val recommendations = document.select(
+            "a[href]:has(div.amv), a[href]:has(div#amv), div.listupd article.bs, " +
+                "article.bs, div.bs, .bixbox a[href]"
+        )
             .mapNotNull { it.toRecommendResult() }
             .distinctBy { it.url }
 
         val castList = emptyList<ActorData>()
 
-        val episodeElements = document.select("div.singlelink ul.lcp_catlist li a, div.eplister ul li a")
+        val episodeElements = document.select(
+            "div.singlelink ul.lcp_catlist li a, div.eplister ul li a, " +
+                "div.bixbox.bxcl ul li a, .episodelist ul li a, ul li a[href*='episode']"
+        )
         val seasonHeaders = document.select("div.hq")
 
         fun normalizeTitle(raw: String): String {
@@ -508,7 +560,10 @@ class Anoboy : MainAPI() {
             val serverEpisodesFromNested = buildServerEpisodes(nestedDocument, href)
             if (serverEpisodesFromNested.isNotEmpty()) return serverEpisodesFromNested
 
-            val nestedEpisodeAnchors = nestedDocument.select("div.singlelink ul.lcp_catlist li a, div.eplister ul li a")
+            val nestedEpisodeAnchors = nestedDocument.select(
+                "div.singlelink ul.lcp_catlist li a, div.eplister ul li a, " +
+                    "div.bixbox.bxcl ul li a, .episodelist ul li a, ul li a[href*='episode']"
+            )
             val filteredNestedAnchors = filterStreamingIfAvailable(nestedEpisodeAnchors.toList())
             return if (filteredNestedAnchors.isNotEmpty()) {
                 buildEpisodesFromAnchors(filteredNestedAnchors.reversed())
