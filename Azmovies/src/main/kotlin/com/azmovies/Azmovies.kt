@@ -66,7 +66,10 @@ class Azmovies : MainAPI() {
         )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = request(request.data.format(page)).document
+        // Jangan pakai String.format() di URL karena genre seperti Science%20Fiction
+        // akan dibaca sebagai formatter conversion dan bikin error: Conversion = 'F'.
+        val pageUrl = request.data.replace("%d", page.toString())
+        val document = request(pageUrl).document
         val home = document.select("#movies-container a.poster").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, home)
     }
