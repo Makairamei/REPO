@@ -139,7 +139,7 @@ class CamWh : MainAPI() {
     ): Boolean {
         val emitted = linkedSetOf<String>()
 
-        fun emitDirect(rawUrl: String?, label: String = name) {
+        suspend fun emitDirect(rawUrl: String?, label: String = name) {
             val videoUrl = rawUrl
                 ?.decodeEscapedUrl()
                 ?.takeIf { it.isNotBlank() }
@@ -161,7 +161,7 @@ class CamWh : MainAPI() {
             )
         }
 
-        fun extractFromHtml(html: String) {
+        suspend fun extractFromHtml(html: String) {
             val patterns = listOf(
                 Regex("""video_alt_url\d*\s*[:=]\s*['"]([^'"]+)""", RegexOption.IGNORE_CASE),
                 Regex("""video_url\d*\s*[:=]\s*['"]([^'"]+)""", RegexOption.IGNORE_CASE),
@@ -171,8 +171,8 @@ class CamWh : MainAPI() {
                 Regex("""['"](https?://[^'"]+\.(?:mp4|m3u8)(?:\?[^'"]*)?)['"]""", RegexOption.IGNORE_CASE)
             )
 
-            patterns.forEach { pattern ->
-                pattern.findAll(html).forEach { match ->
+            for (pattern in patterns) {
+                for (match in pattern.findAll(html)) {
                     emitDirect(match.groupValues.getOrNull(1), "$name - Direct")
                 }
             }
@@ -187,19 +187,21 @@ class CamWh : MainAPI() {
 
         extractFromHtml(response.text)
 
-        document.select("video source[src], video[src], source[src]").forEach { element ->
+        for (element in document.select("video source[src], video[src], source[src]")) {
             emitDirect(element.attr("src"), "$name - Video")
         }
 
-        document.select("iframe[src], iframe[data-src], [data-video], [data-url]").forEach { element ->
+        for (element in document.select("iframe[src], iframe[data-src], [data-video], [data-url]")) {
             val iframeUrl = element.attr("src")
                 .ifBlank { element.attr("data-src") }
                 .ifBlank { element.attr("data-video") }
                 .ifBlank { element.attr("data-url") }
 
             if (iframeUrl.isNotBlank()) {
-                runCatching {
+                try {
                     loadExtractor(fixUrl(iframeUrl), data, subtitleCallback, callback)
+                } catch (_: Exception) {
+                    // Ignore broken iframe fallback and continue direct extraction.
                 }
             }
         }
