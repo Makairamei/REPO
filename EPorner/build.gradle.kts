@@ -1,10 +1,10 @@
 version = 4
 
 cloudstream {
-    authors     = listOf("BetbetMiro")
+    authors     = listOf("sad25kag")
     language    = "id"
-    description = "Watch Full HD Porn Videos for free. We have over 4,975,164 full length Hardcore HD Sex Movies in 720p, 1080p and 4K that you can watch online or download."
-    status  = 1 // will be 3 if unspecified
-    tvTypes = listOf("NSFW")
-    iconUrl = "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://www.eporner.com/&size=128"
+    description = "Nonton video film dewasa kualitas Full HD secara gratis. Koleksi lebih dari 4,9 juta film hardcore kualitas HD, 1080p, dan 4K yang bisa ditonton langsung atau diunduh."
+    status      = 1 
+    tvTypes     = listOf("NSFW")
+    iconUrl     = "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://www.eporner.com/&size=128"
 }
