@@ -130,26 +130,6 @@
     "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/Betbet/Areajav.cs3",
     "name": "Areajav"
   },
-  {
-        "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/Betbet/Desisins.cs3",
-        "status": 1,
-        "version": 4,
-        "name": "Desisins",
-        "internalName": "Desisins",
-        "authors": [
-            "BetbetMiro"
-        ],
-        "description": "18+ webseries clips",
-        "fileSize": 12388,
-        "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "language": "id",
-        "tvTypes": [
-            "NSFW"
-        ],
-        "iconUrl": "https://shorts.desisins.com/wp-content/uploads/2023/04/cropped-favicon-2-32x32.png",
-        "apiVersion": 1,
-        "fileHash": "sha256-b7216ce859571d6e1dedfe6ba7de5a851a8c599d72d0731cc75639cb861cf6b3"
-    },
     {
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/Betbet/Javx.cs3",
         "status": 3,
