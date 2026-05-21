@@ -12,7 +12,7 @@ class Donghub : MainAPI() {
     }
 
     override var mainUrl = "https://donghub.vip"
-    override var name = "Donghub"
+    override var name = "Donghub🐉"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var lang = "id"
@@ -58,7 +58,7 @@ class Donghub : MainAPI() {
             referer = "$mainUrl/"
         ).document
 
-        val items = document.select("div.listupd > article, article.bs, .listupd article, .bs")
+        val items = document.select("div.listupd > article, article.bs, .listupd article, .bs, .listo > article, .listo article, article")
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
@@ -71,20 +71,29 @@ class Donghub : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val anchor = selectFirst("div.bsx > a[href], a[href*='/anime/'], a[href]") ?: return null
+        val anchor = selectFirst("div.bsx > a[href], h2 > a[href], h3 > a[href], a[href]") ?: return null
         val href = anchor.attr("href").absoluteUrl(mainUrl)
-        if (!href.contains("/anime/", true)) return null
+
+        if (href.isBlank()) return null
+        if (href.contains("/genres/", true) ||
+            href.contains("/genre/", true) ||
+            href.contains("/tag/", true) ||
+            href.contains("/page/", true) ||
+            href.contains("/author/", true)
+        ) return null
 
         val title = anchor.attr("title").trim()
-            .ifBlank { selectFirst(".tt, h2, h3")?.text()?.trim().orEmpty() }
+            .ifBlank { selectFirst(".tt, h2, h3, .entry-title")?.text()?.trim().orEmpty() }
             .ifBlank { selectFirst("img")?.attr("alt")?.trim().orEmpty() }
+            .ifBlank { anchor.text().trim() }
             .replace(Regex("""\s+"""), " ")
             .trim()
 
         if (title.isBlank()) return null
 
         val poster = findPoster(this, href)
-        val type = if (title.contains("movie", true)) TvType.AnimeMovie else TvType.Anime
+        val lowerText = (title + " " + text()).lowercase()
+        val type = if (lowerText.contains("movie")) TvType.AnimeMovie else TvType.Anime
 
         return newAnimeSearchResponse(title, href, type) {
             posterUrl = poster
@@ -154,7 +163,7 @@ class Donghub : MainAPI() {
             poster = findPoster(document.body(), url)
         }
 
-        val recommendations = document.select("div.listupd article.bs, .listupd article, article.bs")
+        val recommendations = document.select("div.listupd article.bs, .listupd article, article.bs, .listo article, article")
             .mapNotNull { it.toRecommendResult() }
             .distinctBy { it.url }
 
@@ -216,11 +225,19 @@ class Donghub : MainAPI() {
     private fun Element.toRecommendResult(): SearchResponse? {
         val anchor = selectFirst("a[href]") ?: return null
         val href = anchor.attr("href").absoluteUrl(mainUrl)
-        if (!href.contains("/anime/", true)) return null
 
-        val title = selectFirst(".tt, h2, h3")?.text()?.trim()
+        if (href.isBlank()) return null
+        if (href.contains("/genres/", true) ||
+            href.contains("/genre/", true) ||
+            href.contains("/tag/", true) ||
+            href.contains("/page/", true) ||
+            href.contains("/author/", true)
+        ) return null
+
+        val title = selectFirst(".tt, h2, h3, .entry-title")?.text()?.trim()
             ?.ifBlank { anchor.attr("title").trim() }
             ?.ifBlank { selectFirst("img")?.attr("alt").orEmpty() }
+            ?.ifBlank { anchor.text().trim() }
             ?: return null
 
         val poster = findPoster(this, href)
