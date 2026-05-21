@@ -29,6 +29,7 @@ import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import java.net.URLEncoder
 
 open class Cinemax21Provider : TmdbProvider() {
     override var name = "CineMax21"
@@ -40,6 +41,10 @@ open class Cinemax21Provider : TmdbProvider() {
     override val supportedTypes = setOf(
         TvType.Movie,
         TvType.TvSeries,
+        TvType.Anime,
+        TvType.AnimeMovie,
+        TvType.Cartoon,
+        TvType.AsianDrama,
     )
 
     val wpRedisInterceptor by lazy { CloudflareKiller() }
@@ -84,29 +89,58 @@ open class Cinemax21Provider : TmdbProvider() {
 
     override val mainPage = mainPageOf(
         "$tmdbAPI/trending/movie/day?api_key=$apiKey&region=US&without_genres=16" to "Trending Movies",
+        "$tmdbAPI/trending/tv/day?api_key=$apiKey&region=US&without_genres=16" to "Trending TV Shows",
+        "$tmdbAPI/movie/now_playing?api_key=$apiKey&region=US&without_genres=16" to "Now Playing Movies",
+        "$tmdbAPI/movie/popular?api_key=$apiKey&region=US&without_genres=16" to "Popular Movies",
+        "$tmdbAPI/tv/popular?api_key=$apiKey&region=US&without_genres=16" to "Popular TV Shows",
+        "$tmdbAPI/movie/top_rated?api_key=$apiKey&region=US&without_genres=16" to "Top Rated Movies",
+        "$tmdbAPI/tv/top_rated?api_key=$apiKey&region=US&without_genres=16" to "Top Rated TV Shows",
         "$tmdbAPI/discover/movie?api_key=$apiKey&sort_by=popularity.desc&primary_release_date.gte=2020-01-01&without_genres=16" to "Popular Movies (2020+)",
         "$tmdbAPI/discover/tv?api_key=$apiKey&sort_by=popularity.desc&first_air_date.gte=2020-01-01&without_genres=16" to "Popular TV Shows (2020+)",
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=213&sort_by=popularity.desc&first_air_date.gte=2020-01-01&without_genres=16" to "Netflix Originals (New)",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=8&watch_region=US&sort_by=popularity.desc&primary_release_date.gte=2020-01-01&without_genres=16" to "Netflix Movies (New)",
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=49&sort_by=popularity.desc&first_air_date.gte=2020-01-01&without_genres=16" to "HBO Originals (New)",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=384|1899&watch_region=US&sort_by=popularity.desc&primary_release_date.gte=2020-01-01&without_genres=16" to "HBO Movies (New)",
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=id&sort_by=popularity.desc&first_air_date.gte=2020-01-01" to "Indonesian Series (2020+)",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&without_genres=16,27&sort_by=popularity.desc&primary_release_date.gte=2020-01-01" to "Indonesian Movies (2020+)",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&with_genres=27&without_genres=16&sort_by=popularity.desc&primary_release_date.gte=2020-01-01" to "Indonesian Horror (2020+)",
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=ko&sort_by=popularity.desc&without_genres=16&first_air_date.gte=2020-01-01" to "Korean Dramas (2020+)",
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=zh&sort_by=popularity.desc&without_genres=16&first_air_date.gte=2020-01-01" to "Chinese Dramas (2020+)",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=28&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Action Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=878&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Sci-Fi Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=27&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Horror Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10749&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Romance Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=35&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Comedy Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=53&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Thriller Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=18&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to " Other Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=12&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Adventure Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=9648&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Mystery Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=14&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Fantasy Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10752&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "War Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=80&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Crime Movies",
+
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&without_genres=16&sort_by=popularity.desc" to "Indonesian Movies",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=id&without_genres=16&sort_by=popularity.desc" to "Indonesian Series",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&with_genres=27&without_genres=16&sort_by=popularity.desc" to "Indonesian Horror",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=ko&sort_by=popularity.desc&without_genres=16" to "Korean Dramas",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=zh&sort_by=popularity.desc&without_genres=16" to "Chinese Dramas",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=ja&sort_by=popularity.desc&without_genres=16" to "Japanese Series",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=th&sort_by=popularity.desc&without_genres=16" to "Thai Series",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=hi&sort_by=popularity.desc&without_genres=16" to "Indian Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=ko&sort_by=popularity.desc&without_genres=16" to "Korean Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=zh&sort_by=popularity.desc&without_genres=16" to "Chinese Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=ja&sort_by=popularity.desc&without_genres=16" to "Japanese Movies",
+
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=213&sort_by=popularity.desc&first_air_date.gte=2020-01-01&without_genres=16" to "Netflix Originals",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=8&watch_region=US&sort_by=popularity.desc&primary_release_date.gte=2020-01-01&without_genres=16" to "Netflix Movies",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=49&sort_by=popularity.desc&first_air_date.gte=2020-01-01&without_genres=16" to "HBO Originals",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=384|1899&watch_region=US&sort_by=popularity.desc&primary_release_date.gte=2020-01-01&without_genres=16" to "HBO Movies",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=2739&sort_by=popularity.desc&without_genres=16" to "Disney+ Series",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=337&watch_region=US&sort_by=popularity.desc&without_genres=16" to "Disney+ Movies",
+
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=28&sort_by=popularity.desc&without_genres=16" to "Action Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=12&sort_by=popularity.desc&without_genres=16" to "Adventure Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=35&sort_by=popularity.desc&without_genres=16" to "Comedy Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=80&sort_by=popularity.desc&without_genres=16" to "Crime Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=99&sort_by=popularity.desc&without_genres=16" to "Documentary Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=18&sort_by=popularity.desc&without_genres=16" to "Drama Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=14&sort_by=popularity.desc&without_genres=16" to "Fantasy Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=27&sort_by=popularity.desc&without_genres=16" to "Horror Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=9648&sort_by=popularity.desc&without_genres=16" to "Mystery Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10749&sort_by=popularity.desc&without_genres=16" to "Romance Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=878&sort_by=popularity.desc&without_genres=16" to "Sci-Fi Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=53&sort_by=popularity.desc&without_genres=16" to "Thriller Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10752&sort_by=popularity.desc&without_genres=16" to "War Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=37&sort_by=popularity.desc&without_genres=16" to "Western Movies",
+
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=10759&sort_by=popularity.desc&without_genres=16" to "Action & Adventure TV",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=35&sort_by=popularity.desc&without_genres=16" to "Comedy TV",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=80&sort_by=popularity.desc&without_genres=16" to "Crime TV",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=99&sort_by=popularity.desc&without_genres=16" to "Documentary TV",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=18&sort_by=popularity.desc&without_genres=16" to "Drama TV",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=10751&sort_by=popularity.desc&without_genres=16" to "Family TV",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=9648&sort_by=popularity.desc&without_genres=16" to "Mystery TV",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=10765&sort_by=popularity.desc&without_genres=16" to "Sci-Fi & Fantasy TV",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_genres=10768&sort_by=popularity.desc&without_genres=16" to "War & Politics TV",
     )
 
     private fun getImageUrl(link: String?): String? {
@@ -120,35 +154,54 @@ open class Cinemax21Provider : TmdbProvider() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val adultQuery =
-            if (settingsForProvider.enableAdult) "" else "&without_keywords=190370|13059|226161|195669"
-        val type = if (request.data.contains("/movie")) "movie" else "tv"
-        
-        val home = app.get("${request.data}$adultQuery&page=$page")
-            .parsedSafe<Results>()?.results?.mapNotNull { media ->
-                media.toSearchResponse(type)
-            } ?: throw ErrorLoadingException("Invalid Json reponse")
-        return newHomePageResponse(request.name, home)
+        val adultQuery = if (settingsForProvider.enableAdult) {
+            ""
+        } else {
+            "&without_keywords=190370|13059|226161|195669"
+        }
+        val type = if (request.data.contains("/movie", ignoreCase = true)) "movie" else "tv"
+        val pageUrl = "${request.data}$adultQuery&page=$page"
+
+        val home = app.get(pageUrl)
+            .parsedSafe<Results>()
+            ?.results
+            ?.mapNotNull { media -> media.toSearchResponse(type) }
+            .orEmpty()
+
+        return newHomePageResponse(
+            HomePageList(request.name, home),
+            hasNext = home.isNotEmpty()
+        )
     }
 
     private fun Media.toSearchResponse(type: String? = null): SearchResponse? {
-        return newMovieSearchResponse(
-            title ?: name ?: originalTitle ?: return null,
-            Data(id = id, type = mediaType ?: type).toJson(),
-            TvType.Movie,
-        ) {
-            this.posterUrl = getImageUrl(posterPath)
-            this.score = Score.from10(voteAverage)
+        val mediaTypeValue = mediaType ?: type ?: return null
+        val titleValue = title ?: name ?: originalTitle ?: return null
+        val data = Data(id = id, type = mediaTypeValue).toJson()
+        val poster = getImageUrl(posterPath)
+        val scoreValue = Score.from10(voteAverage)
+
+        return if (getType(mediaTypeValue) == TvType.TvSeries) {
+            newTvSeriesSearchResponse(titleValue, data, TvType.TvSeries) {
+                this.posterUrl = poster
+                this.score = scoreValue
+            }
+        } else {
+            newMovieSearchResponse(titleValue, data, TvType.Movie) {
+                this.posterUrl = poster
+                this.score = scoreValue
+            }
         }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun search(query: String): List<SearchResponse>? {
-        return app.get("$tmdbAPI/search/multi?api_key=$apiKey&language=en-US&query=$query&page=1&include_adult=${settingsForProvider.enableAdult}")
-            .parsedSafe<Results>()?.results?.mapNotNull { media ->
-                media.toSearchResponse()
-            }
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        return app.get("$tmdbAPI/search/multi?api_key=$apiKey&language=en-US&query=$encodedQuery&page=1&include_adult=${settingsForProvider.enableAdult}")
+            .parsedSafe<Results>()
+            ?.results
+            ?.mapNotNull { media -> media.toSearchResponse() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
@@ -194,7 +247,7 @@ open class Cinemax21Provider : TmdbProvider() {
         val isBollywood = res.productionCountries?.any { it.name == "India" } ?: false
 
         val keywords = res.keywords?.results?.mapNotNull { it.name }.orEmpty()
-            .ifEmpty { res.keywords?.keywords?.mapNotNull { it.name } }
+            .ifEmpty { res.keywords?.keywords?.mapNotNull { it.name }.orEmpty() }
 
         val actors = res.credits?.cast?.mapNotNull { cast ->
             ActorData(
@@ -257,14 +310,19 @@ open class Cinemax21Provider : TmdbProvider() {
             newTvSeriesLoadResponse(
                 title,
                 url,
-                if (isAnime) TvType.Anime else TvType.TvSeries,
+                when {
+                    isAnime -> TvType.Anime
+                    isAsian -> TvType.AsianDrama
+                    isCartoon -> TvType.Cartoon
+                    else -> TvType.TvSeries
+                },
                 episodes
             ) {
                 this.posterUrl = poster
                 this.backgroundPosterUrl = bgPoster
                 this.year = year
                 this.plot = res.overview
-                this.tags = keywords.takeIf { !it.isNullOrEmpty() } ?: genres
+                this.tags = keywords.takeIf { it.isNotEmpty() } ?: genres
                 this.score = Score.from10(res.voteAverage?.toString())
                 this.showStatus = getStatus(res.status)
                 this.recommendations = recommendations
@@ -278,7 +336,12 @@ open class Cinemax21Provider : TmdbProvider() {
             newMovieLoadResponse(
                 title,
                 url,
-                TvType.Movie,
+                when {
+                    isAnime -> TvType.AnimeMovie
+                    isAsian -> TvType.AsianDrama
+                    isCartoon -> TvType.Cartoon
+                    else -> TvType.Movie
+                },
                 LinkData(
                     data.id,
                     res.externalIds?.imdbId,
@@ -301,7 +364,7 @@ open class Cinemax21Provider : TmdbProvider() {
                 this.year = year
                 this.plot = res.overview
                 this.duration = res.runtime
-                this.tags = keywords.takeIf { !it.isNullOrEmpty() } ?: genres
+                this.tags = keywords.takeIf { it.isNotEmpty() } ?: genres
                 this.score = Score.from10(res.voteAverage?.toString())
                 this.recommendations = recommendations
                 this.actors = actors
