@@ -209,37 +209,58 @@ class Gojodesu : MainAPI() {
             found = true
         }
 
-        document.select("a[href*='kotakajaib.me'], a[href*='kotakajaib']")
-            .forEach { a ->
-                val href = a.attr("href").trim()
-                if (href.isNotBlank()) {
-                    links.add(fixUrl(href))
-                }
+        document.select(
+            "a[href*='kotakajaib.me'], " +
+                "a[href*='kotakajaib'], " +
+                "a:contains(Download)"
+        ).forEach { a ->
+            val href = a.attr("href").trim()
+            if (href.isNotBlank()) {
+                links.add(fixUrl(href))
             }
+        }
 
         document.select("select.mirror option[value]:not([disabled])")
             .map { it.attr("value").trim() }
-            .filter { it.isNotBlank() && !it.contains("Select Video Server", true) }
-            .forEach { links.add(fixUrl(it)) }
+            .filter {
+                it.isNotBlank() &&
+                    !it.contains("Select Video Server", true)
+            }
+            .forEach {
+                links.add(fixUrl(it))
+            }
 
         document.select(
             "iframe[src], " +
                 "embed[src], " +
-                "div.player iframe[src], " +
-                ".player iframe[src]"
-        ).forEach { iframe ->
-            iframe.attr("src")
-                .trim()
-                .takeIf { it.isNotBlank() }
-                ?.let { links.add(httpsify(it)) }
+                "source[src], " +
+                "video[src]"
+        ).forEach { element ->
+            val src = element.attr("src").trim()
+            if (src.isNotBlank()) {
+                links.add(httpsify(src))
+            }
         }
 
         links.forEach { link ->
+            if (link.contains("kotakajaib", true)) {
+                loadExtractor(
+                    link,
+                    data,
+                    subtitleCallback,
+                    callback
+                )
+                found = true
+                return@forEach
+            }
+
             val linkResponse = runCatching {
                 app.get(link, referer = data)
             }.getOrNull()
 
-            val m3u8s = linkResponse?.text?.let { extractM3u8Urls(it) }.orEmpty()
+            val m3u8s = linkResponse?.text
+                ?.let { extractM3u8Urls(it) }
+                .orEmpty()
 
             if (m3u8s.isNotEmpty()) {
                 m3u8s.forEach { m3u8 ->
@@ -251,14 +272,18 @@ class Gojodesu : MainAPI() {
 
                     found = true
                 }
-            }
-
-            if (!found || link.contains("kotakajaib", true)) {
-                loadExtractor(link, data, subtitleCallback, callback)
+            } else {
+                loadExtractor(
+                    link,
+                    data,
+                    subtitleCallback,
+                    callback
+                )
+                found = true
             }
         }
 
-        return found || links.isNotEmpty()
+        return found
     }
 
     private fun parseEpisodes(
@@ -279,8 +304,10 @@ class Gojodesu : MainAPI() {
                 val episodeNumber = extractEpisodeNumber(element.text(), absoluteUrl)
                     ?: return@forEach
 
-                val isEpisodeUrl = Regex("""(^|/)?.*-episode-\d+/?$""", RegexOption.IGNORE_CASE)
-                    .containsMatchIn(path)
+                val isEpisodeUrl = Regex(
+                    """(^|/)?.*-episode-\d+/?$""",
+                    RegexOption.IGNORE_CASE
+                ).containsMatchIn(path)
 
                 if (!isEpisodeUrl) return@forEach
 
@@ -340,7 +367,11 @@ class Gojodesu : MainAPI() {
         }
     }
 
-    private fun guessType(title: String, url: String, tags: List<String>): TvType {
+    private fun guessType(
+        title: String,
+        url: String,
+        tags: List<String>
+    ): TvType {
         return when {
             url.contains("movie", true) -> TvType.AnimeMovie
             title.contains("movie", true) -> TvType.AnimeMovie
@@ -357,7 +388,7 @@ class Gojodesu : MainAPI() {
     private fun extractM3u8Urls(text: String): List<String> {
         return Regex("""https?://[^"'\\\s<>]+\.m3u8[^"'\\\s<>]*""")
             .findAll(text)
-            .map { it.value.replace("\\/", "/") }
+            .map { it.value.cleanEscapedUrl() }
             .distinct()
             .toList()
     }
@@ -371,7 +402,10 @@ class Gojodesu : MainAPI() {
         }
     }
 
-    private fun extractEpisodeNumber(title: String, href: String): Int? {
+    private fun extractEpisodeNumber(
+        title: String,
+        href: String
+    ): Int? {
         return Regex("""(?:episode|eps?|ep)\s*(\d+)""", RegexOption.IGNORE_CASE)
             .find(title)
             ?.groupValues
@@ -387,6 +421,14 @@ class Gojodesu : MainAPI() {
                 ?.groupValues
                 ?.getOrNull(1)
                 ?.toIntOrNull()
+    }
+
+    private fun String.cleanEscapedUrl(): String {
+        return this
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("&amp;", "&")
+            .trim()
     }
 
     private fun String.cleanSeriesTitle(): String {
