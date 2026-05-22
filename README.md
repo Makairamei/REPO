@@ -9,110 +9,152 @@
 
 <br><br>
 
-### 🎬 CloudStream Extension Repository
-**⚡ Fast • Stable • Anime • Donghua • Movies**
+## 🎬 CloudStream Extension Repository
+
+**⚡ Fast • Stable • Anime • Donghua • Movies • Drama**
 
 <p align="center">
-Repository extension CloudStream custom berisi berbagai provider anime, donghua, movie, dan source streaming lainnya.
+Repository extension CloudStream custom yang berisi berbagai provider anime, donghua, drama, movie, dan source streaming lainnya.
+Dibuat untuk pengalaman nonton yang lebih praktis, ringan, dan terus diperbarui mengikuti perubahan source.
 </p>
 
 </div>
 
 ---
 
-## ✨ Features
+## ✨ Fitur Utama
 
-- 🎥 Streaming langsung dari aplikasi
-- ⚡ Cepat dan ringan
-- 🔄 Auto-update extension
-- 🧩 Support CloudStream versi terbaru
-- 🌐 Banyak source anime & donghua
-- 🛠️ Open source
-- 📱 Optimized untuk Android modern
+- 🎥 Streaming langsung melalui aplikasi CloudStream
+- ⚡ Ringan, cepat, dan mudah digunakan
+- 🔄 Mendukung auto-update extension
+- 🧩 Kompatibel dengan CloudStream versi terbaru
+- 🌐 Berisi banyak source anime, donghua, drama, dan movie
+- 📱 Dioptimalkan untuk perangkat Android modern
+- 🛠️ Open source dan aktif diperbarui
+- 🍿 Cocok untuk pengguna yang ingin repo praktis tanpa ribet
 
 ---
 
 ## 📥 Install Repository
 
-Pilih salah satu metode instalasi di bawah ini:
+Pilih salah satu metode instalasi di bawah ini.
 
-### Metode 1: One-Click Install (Rekomendasi)
-Klik tombol di bawah ini dari perangkat Android kamu untuk menginstal secara otomatis:
+### ✅ Metode 1: One-Click Install
+
+Klik tombol/link berikut dari perangkat Android yang sudah terpasang CloudStream:
 
 👉 **[Install BetbetMiro Repository](cloudstreamrepo://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/repo.json)**
 
-### Metode 2: Install Manual
-Jika cara di atas tidak berfungsi, ikuti langkah berikut:
+### 🧩 Metode 2: Install Manual
+
+Jika metode one-click tidak berjalan, gunakan cara manual:
+
 1. Buka aplikasi **CloudStream**
-2. Masuk ke **Settings** > **Extensions**
-3. Klik **Add Repository**
-4. Paste link berikut:
-   ```txt
-   [https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/repo.json](https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/repo.json)
-   ```
-5. Klik Install dan selesai! 🎉
+2. Masuk ke **Settings**
+3. Pilih **Extensions**
+4. Tekan **Add Repository**
+5. Paste link berikut:
+
+```txt
+https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/repo.json
+```
+
+6. Tekan **Add / Install**
+7. Selesai, tinggal pilih extension yang ingin digunakan 🎉
 
 ---
 
-## 🧩 Included Extensions
+## 🧩 Isi Repository
 
-- **Anichin**
-- **Donghua Sources**
+Repository ini berisi berbagai provider, seperti:
+
 - **Anime Providers**
+- **Donghua Providers**
 - **Movie Providers**
-- *Dan banyak lagi...*
+- **Drama Providers**
+- **Multi-source Providers**
+- **Extractor pendukung**
+- Dan source lain yang akan terus ditambahkan
 
-> *Repository akan terus diperbarui mengikuti perubahan website source.*
+> Daftar provider dapat berubah sewaktu-waktu mengikuti kondisi website source dan hasil build terbaru.
 
 ---
 
 ## 🛠️ Build From Source
 
-Jika kamu ingin melakukan kompilasi mandiri atau berkontribusi:
+Untuk kamu yang ingin melakukan build mandiri, testing, atau kontribusi:
 
 ### 1. Clone Repository
+
 ```bash
-git clone [https://github.com/sad25kag/BetbetMiro-Extension.git](https://github.com/sad25kag/BetbetMiro-Extension.git)
+git clone https://github.com/sad25kag/BetbetMiro-Extension.git
 cd BetbetMiro-Extension
 ```
 
 ### 2. Build Extension
+
 ```bash
 ./gradlew make
 ```
 
 ### 3. Output Build
-Hasil *build* akan berada di dalam direktori:
+
+Hasil build akan tersedia di folder:
+
 ```txt
 /builds
 ```
 
 ---
 
-## 📸 Preview
+## 📸 Preview Alur Install
 
 ```txt
 CloudStream
  └── Settings
      └── Extensions
-         └── BetbetMiro Repo
-               └── Install
-                   └── Enjoy 🍿
+         └── Add Repository
+             └── BetbetMiro Repo
+                 └── Install Extension
+                     └── Enjoy 🍿
 ```
+
+---
+
+## 🔄 Update
+
+Repository ini akan terus diperbarui jika ada:
+
+- Source yang berubah domain
+- Provider yang error
+- Parser yang perlu diperbaiki
+- Kategori baru
+- Extractor baru
+- Perbaikan build Gradle
+
+Kalau ada provider yang tidak berjalan, silakan cek update terbaru atau laporkan melalui issue.
 
 ---
 
 ## ⚠️ Disclaimer
 
-Repository ini dibuat hanya untuk tujuan pembelajaran dan pengembangan extension CloudStream. Semua konten berasal dari pihak ketiga atau sumber publik di internet.
+Repository ini dibuat untuk tujuan pembelajaran, pengembangan, dan penggunaan extension CloudStream.
+
+Semua konten, metadata, gambar, video, maupun source streaming berasal dari pihak ketiga atau sumber publik di internet. Repository ini tidak menyimpan, meng-host, atau mengunggah konten video apa pun.
+
+Gunakan dengan bijak dan patuhi aturan yang berlaku di wilayah masing-masing.
 
 ---
 
 ## ❤️ Credits
 
+Terima kasih untuk:
+
 - [CloudStream](https://github.com/recloudstream/cloudstream)
-- Semua developer provider
+- Semua developer provider dan extractor
 - Komunitas open source
+- Pengguna yang ikut membantu testing dan melaporkan error
+- Gradle, walau sering bikin kepala ingin restart hidup 😭
 
 ---
 
@@ -120,6 +162,6 @@ Repository ini dibuat hanya untuk tujuan pembelajaran dan pengembangan extension
 
 ## 🍿 Happy Streaming
 
-**Made with ☕ + error merah Gradle 😭**
+**Made with ☕, semangat, dan error merah Gradle yang tidak ada habisnya.**
 
 </div>
