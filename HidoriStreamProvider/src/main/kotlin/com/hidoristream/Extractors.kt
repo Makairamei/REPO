@@ -6,7 +6,6 @@ import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.extractors.StreamWishExtractor
 import com.lagradost.cloudstream3.extractors.VidStack
-import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
@@ -87,7 +86,9 @@ open class EarnvidsLike : ExtractorApi() {
         val found = linkedSetOf<String>()
         val html = response.text.cleanEscaped()
 
-        extractStreamUrls(html).forEach { found.add(normalizeUrl(it, embedUrl)) }
+        extractStreamUrls(html).forEach {
+            found.add(normalizeUrl(it, embedUrl))
+        }
 
         val unpacked = runCatching {
             if (!getPacked(html).isNullOrEmpty()) getAndUnpack(html) else null
@@ -100,14 +101,18 @@ open class EarnvidsLike : ExtractorApi() {
                 unpacked
             }.cleanEscaped()
 
-            extractStreamUrls(script).forEach { found.add(normalizeUrl(it, embedUrl)) }
+            extractStreamUrls(script).forEach {
+                found.add(normalizeUrl(it, embedUrl))
+            }
         }
 
         response.document.selectFirst("script:containsData(sources:)")
             ?.data()
             ?.cleanEscaped()
             ?.let { script ->
-                extractStreamUrls(script).forEach { found.add(normalizeUrl(it, embedUrl)) }
+                extractStreamUrls(script).forEach {
+                    found.add(normalizeUrl(it, embedUrl))
+                }
             }
 
         found.forEach { stream ->
@@ -126,8 +131,8 @@ open class EarnvidsLike : ExtractorApi() {
                         url = stream,
                         type = ExtractorLinkType.VIDEO
                     ) {
-                        referer = "$mainUrl/"
-                        quality = getQualityFromName(stream).takeIf {
+                        this.referer = "$mainUrl/"
+                        this.quality = getQualityFromName(stream).takeIf {
                             it != Qualities.Unknown.value
                         } ?: qualityFromUrl(stream)
                     }
@@ -272,8 +277,8 @@ class Veev : ExtractorApi() {
                         ExtractorLinkType.VIDEO
                     }
                 ) {
-                    referer = mainUrl
-                    quality = getQualityFromName(decoded).takeIf {
+                    this.referer = mainUrl
+                    this.quality = getQualityFromName(decoded).takeIf {
                         it != Qualities.Unknown.value
                     } ?: Qualities.Unknown.value
                 }
@@ -367,8 +372,8 @@ class HidoriStream : ExtractorApi() {
                     ExtractorLinkType.VIDEO
                 }
             ) {
-                referer = referer ?: mainUrl
-                quality = getQualityFromName(url).takeIf {
+                this.referer = referer ?: mainUrl
+                this.quality = getQualityFromName(url).takeIf {
                     it != Qualities.Unknown.value
                 } ?: Qualities.Unknown.value
             }
@@ -391,12 +396,16 @@ class Terabox : ExtractorApi() {
             app.get(url, referer = referer).text.cleanEscaped()
         }.getOrNull() ?: return
 
-        val videoUrl = Regex("""<source[^>]+src=["'](https?://[^"']+\.(?:mp4|m3u8)[^"']*)["']""", RegexOption.IGNORE_CASE)
-            .find(response)
+        val videoUrl = Regex(
+            """<source[^>]+src=["'](https?://[^"']+\.(?:mp4|m3u8)[^"']*)["']""",
+            RegexOption.IGNORE_CASE
+        ).find(response)
             ?.groupValues
             ?.getOrNull(1)
-            ?: Regex("""(https?://[^\s"',]+?\.(?:mp4|m3u8)[^\s"',]*)""", RegexOption.IGNORE_CASE)
-                .find(response)
+            ?: Regex(
+                """(https?://[^\s"',]+?\.(?:mp4|m3u8)[^\s"',]*)""",
+                RegexOption.IGNORE_CASE
+            ).find(response)
                 ?.groupValues
                 ?.getOrNull(1)
                 ?.replace("\\/", "/")
@@ -418,8 +427,8 @@ class Terabox : ExtractorApi() {
                         ExtractorLinkType.VIDEO
                     }
                 ) {
-                    referer = mainUrl
-                    quality = getQualityFromName(link).takeIf {
+                    this.referer = mainUrl
+                    this.quality = getQualityFromName(link).takeIf {
                         it != Qualities.Unknown.value
                     } ?: qualityFromUrl(link)
                 }
@@ -455,7 +464,12 @@ class Buzzheavier : ExtractorApi() {
                 ?.getOrNull(1)
 
         videoUrl?.let { raw ->
-            val link = if (raw.startsWith("/")) "$mainUrl$raw" else raw
+            val link = when {
+                raw.startsWith("http", true) -> raw
+                raw.startsWith("//") -> "https:$raw"
+                raw.startsWith("/") -> "$mainUrl$raw"
+                else -> "$mainUrl/$raw"
+            }
 
             callback.invoke(
                 newExtractorLink(
@@ -468,8 +482,8 @@ class Buzzheavier : ExtractorApi() {
                         ExtractorLinkType.VIDEO
                     }
                 ) {
-                    referer = mainUrl
-                    quality = getQualityFromName(link).takeIf {
+                    this.referer = mainUrl
+                    this.quality = getQualityFromName(link).takeIf {
                         it != Qualities.Unknown.value
                     } ?: qualityFromUrl(link)
                 }
@@ -534,7 +548,7 @@ private fun normalizeUrl(
         }
         else -> runCatching {
             URI(baseUrl).resolve(clean).toString()
-        }.getOrDefault(fixUrl(clean))
+        }.getOrDefault(clean)
     }
 }
 

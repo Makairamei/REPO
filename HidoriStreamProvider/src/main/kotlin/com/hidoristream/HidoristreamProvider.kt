@@ -10,7 +10,6 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
-import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SearchResponseList
 import com.lagradost.cloudstream3.ShowStatus
@@ -405,7 +404,7 @@ class HidoristreamProvider : MainAPI() {
             showStatus = status
             this.recommendations = recommendations
             this.duration = duration ?: 0
-            addEpisodes(DubStatus.Subbed, episodes)
+            this.episodes = hashMapOf(DubStatus.Subbed to episodes)
             addScore(rating)
             addActors(actors.map { Actor(it) })
             addTrailer(trailer)
@@ -496,8 +495,8 @@ class HidoristreamProvider : MainAPI() {
                         url = link,
                         type = ExtractorLinkType.VIDEO
                     ) {
-                        referer = data
-                        quality = getQualityFromName(link).takeIf {
+                        this.referer = data
+                        this.quality = getQualityFromName(link).takeIf {
                             it != Qualities.Unknown.value
                         } ?: qualityFromUrl(link)
                     }
