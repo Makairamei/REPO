@@ -215,6 +215,7 @@ class Gomunime : MainAPI() {
         val q = URLEncoder.encode(query.trim(), "UTF-8")
 
         val endpoints = listOf(
+            "$mainUrl/search?q=$q",
             "$mainUrl/?s=$q",
             "$mainUrl/search/$q"
         )
@@ -269,12 +270,15 @@ class Gomunime : MainAPI() {
             }
         )
 
-        val infoText = document.selectFirst(
-            ".spe, " +
-                ".info-content, " +
-                ".entry-content, " +
-                "body"
-        )?.text().orEmpty()
+        val smallInfoText = document.select(
+            ".badge-brand, " +
+                ".badge-glass, " +
+                ".badge-warning, " +
+                ".spe span, " +
+                ".info-content span, " +
+                "a[href*='/type/'], " +
+                "a[href*='/status/']"
+        ).joinToString(" ") { it.text() }
 
         val tags = document.select(
             "a[href*='/genre/'], " +
@@ -299,15 +303,21 @@ class Gomunime : MainAPI() {
         }?.trim()
             ?.takeIf { it.isNotBlank() }
 
-        val type = getType(infoText, url, title)
         val episodes = document.getEpisodes(url)
+        val type = getType(smallInfoText, url, title, episodes)
 
-        return if (type == TvType.AnimeMovie) {
+        val shouldBeMovie = type == TvType.AnimeMovie && episodes.size <= 1 && isRealMoviePage(
+            url = url,
+            title = title,
+            smallInfo = smallInfoText
+        )
+
+        return if (shouldBeMovie) {
             newMovieLoadResponse(
                 title,
                 url,
                 TvType.AnimeMovie,
-                url
+                episodes.firstOrNull()?.data ?: url
             ) {
                 this.posterUrl = poster
                 this.plot = plot
@@ -317,13 +327,13 @@ class Gomunime : MainAPI() {
             newTvSeriesLoadResponse(
                 title,
                 url,
-                type,
+                type.takeIf { it != TvType.AnimeMovie } ?: TvType.Anime,
                 episodes
             ) {
                 this.posterUrl = poster
                 this.plot = plot
                 this.tags = tags
-                this.showStatus = getStatus(infoText)
+                this.showStatus = getStatus(smallInfoText)
             }
         }
     }
@@ -345,7 +355,8 @@ class Gomunime : MainAPI() {
         val episodes = linkedMapOf<String, Episode>()
 
         select(
-            "a[href*='episode-'], " +
+            "section:contains(Pilih Episode) a[href], " +
+                "a[href*='episode-'], " +
                 "a:contains(Episode), " +
                 "a:contains(Nonton Episode), " +
                 "div.eplister ul li a[href], " +
@@ -359,7 +370,8 @@ class Gomunime : MainAPI() {
 
             val isValidEpisode = href.contains("episode-", true) ||
                 a.text().contains("episode", true) ||
-                a.text().contains("nonton episode", true)
+                a.text().contains("nonton episode", true) ||
+                a.text().trim().matches(Regex("""\d+"""))
 
             if (!isValidEpisode) return@forEachIndexed
 
@@ -382,16 +394,19 @@ class Gomunime : MainAPI() {
     }
 
     private fun getType(
-        text: String?,
+        smallInfo: String?,
         url: String,
-        title: String
+        title: String,
+        episodes: List<Episode>
     ): TvType {
-        val value = "${text.orEmpty()} $url $title"
+        val value = "${smallInfo.orEmpty()} $url $title"
+
+        if (episodes.size > 1) return TvType.Anime
 
         return when {
-            value.contains("movie", true) -> TvType.AnimeMovie
             value.contains("ova", true) -> TvType.OVA
             value.contains("special", true) -> TvType.OVA
+            isRealMoviePage(url, title, smallInfo.orEmpty()) -> TvType.AnimeMovie
             else -> TvType.Anime
         }
     }
@@ -400,13 +415,32 @@ class Gomunime : MainAPI() {
         url: String,
         title: String
     ): TvType {
+        val value = "$url $title"
+
         return when {
-            url.contains("movie", true) -> TvType.AnimeMovie
-            title.contains("movie", true) -> TvType.AnimeMovie
-            url.contains("ova", true) -> TvType.OVA
-            title.contains("ova", true) -> TvType.OVA
+            value.contains("ova", true) -> TvType.OVA
+            value.contains("special", true) -> TvType.OVA
+            value.contains("/type/movie", true) -> TvType.AnimeMovie
+            title.contains(" movie ", true) -> TvType.AnimeMovie
+            title.endsWith(" movie", true) -> TvType.AnimeMovie
             else -> TvType.Anime
         }
+    }
+
+    private fun isRealMoviePage(
+        url: String,
+        title: String,
+        smallInfo: String
+    ): Boolean {
+        val path = runCatching {
+            URI(url).path.trim('/')
+        }.getOrNull().orEmpty()
+
+        val value = "$smallInfo $title"
+
+        return path.contains("movie", true) ||
+            value.contains("Full Movie", true) ||
+            Regex("""(^|\s)Movie(\s|$)""", RegexOption.IGNORE_CASE).containsMatchIn(smallInfo)
     }
 
     private fun getStatus(text: String?): ShowStatus {
