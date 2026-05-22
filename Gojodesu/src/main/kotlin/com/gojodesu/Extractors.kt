@@ -19,24 +19,36 @@ open class Kotakajaib : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val document = app.get(url, referer = referer ?: mainUrl).document
-        val links = document.select("ul#dropdown-server li a[data-frame], a[data-frame]")
 
-        for (a in links) {
+        val directFrames = linkedSetOf<String>()
+
+        document.select("ul#dropdown-server li a[data-frame], a[data-frame]").forEach { a ->
             val encodedFrame = a.attr("data-frame").trim()
-            if (encodedFrame.isBlank()) continue
+            if (encodedFrame.isBlank()) return@forEach
 
             val frameUrl = runCatching {
                 base64Decode(encodedFrame).trim()
             }.getOrNull()
 
             if (!frameUrl.isNullOrBlank()) {
-                loadExtractor(
-                    normalizeUrl(frameUrl),
-                    "$mainUrl/",
-                    subtitleCallback,
-                    callback
-                )
+                directFrames.add(normalizeUrl(frameUrl))
             }
+        }
+
+        document.select("iframe[src], embed[src]").forEach { iframe ->
+            val frameUrl = iframe.attr("src").trim()
+            if (frameUrl.isNotBlank()) {
+                directFrames.add(normalizeUrl(frameUrl))
+            }
+        }
+
+        directFrames.forEach { frame ->
+            loadExtractor(
+                frame,
+                url,
+                subtitleCallback,
+                callback
+            )
         }
     }
 

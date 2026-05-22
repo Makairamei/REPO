@@ -138,7 +138,7 @@ class Gojodesu : MainAPI() {
             ?.ifBlank { null }
             ?: url.substringAfterLast("/").replace("-", " ")
 
-        val title = rawTitle.cleanTitle()
+        val title = rawTitle.cleanSeriesTitle()
 
         val poster = fixUrlNull(
             document.selectFirst(
@@ -176,7 +176,7 @@ class Gojodesu : MainAPI() {
             .filter { it.isNotBlank() }
             .distinct()
 
-        val episodes = parseEpisodes(document, url)
+        val episodes = parseEpisodes(document, title, url)
 
         return newTvSeriesLoadResponse(title, url, guessType(title, url, tags), episodes) {
             this.posterUrl = poster
@@ -193,6 +193,14 @@ class Gojodesu : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
         val links = linkedSetOf<String>()
+
+        document.select("a[href*='kotakajaib.me'], a[href*='kotakajaib']")
+            .forEach { a ->
+                val href = a.attr("href").trim()
+                if (href.isNotBlank()) {
+                    links.add(fixUrl(href))
+                }
+            }
 
         document.select("select.mirror option[value]:not([disabled])")
             .map { it.attr("value").trim() }
@@ -211,19 +219,15 @@ class Gojodesu : MainAPI() {
                 ?.let { links.add(httpsify(it)) }
         }
 
-        document.select("a[href*='kotakajaib'], a[href*='kotakajaib.me']")
-            .forEach { a ->
-                a.attr("href")
-                    .trim()
-                    .takeIf { it.isNotBlank() }
-                    ?.let { links.add(fixUrl(it)) }
+        links.forEach { link ->
+            if (link.contains("kotakajaib", true)) {
+                loadExtractor(link, data, subtitleCallback, callback)
+                return@forEach
             }
 
-        links.forEach { link ->
-            val pageUrl = fixUrl(link)
-
             val embed = runCatching {
-                val mirrorDoc = app.get(pageUrl).document
+                val mirrorDoc = app.get(link, referer = data).document
+
                 mirrorDoc.selectFirst("iframe[src], embed[src]")
                     ?.attr("src")
                     ?.trim()
@@ -231,48 +235,53 @@ class Gojodesu : MainAPI() {
                     ?.let { httpsify(it) }
             }.getOrNull()
 
-            loadExtractor(embed ?: pageUrl, data, subtitleCallback, callback)
+            loadExtractor(embed ?: link, data, subtitleCallback, callback)
         }
 
         return links.isNotEmpty()
     }
 
-    private fun parseEpisodes(document: Document, fallbackUrl: String): List<Episode> {
-        val episodes = mutableListOf<Episode>()
+    private fun parseEpisodes(
+        document: Document,
+        seriesTitle: String,
+        fallbackUrl: String
+    ): List<Episode> {
+        val episodes = linkedMapOf<String, Episode>()
 
-        document.select(
-            "a[href*='episode'], " +
-                ".eplister a[href], " +
-                ".episodelist a[href], " +
-                ".episode-list a[href], " +
-                ".box_eps a[href], " +
-                ".lstepsiode a[href]"
-        ).forEachIndexed { index, element ->
-            val href = element.attr("href").trim()
-            if (href.isBlank()) return@forEachIndexed
+        document.select("a[href]")
+            .forEach { element ->
+                val href = element.attr("href").trim()
+                if (href.isBlank()) return@forEach
 
-            val epTitle = element.text().trim()
-                .ifBlank { element.attr("title").trim() }
-                .ifBlank { "Episode ${index + 1}" }
+                val absoluteUrl = fixUrl(href)
+                val path = absoluteUrl.substringAfter(mainUrl).trim('/')
 
-            val epNumber = extractEpisodeNumber(epTitle, href) ?: index + 1
+                val episodeNumber = extractEpisodeNumber(element.text(), absoluteUrl)
+                    ?: return@forEach
 
-            episodes.add(
-                newEpisode(fixUrl(href)) {
-                    this.name = epTitle.cleanTitle()
-                    this.episode = epNumber
+                val isEpisodeUrl = Regex("""(^|/)?.*-episode-\d+/?$""", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(path)
+
+                if (!isEpisodeUrl) return@forEach
+
+                val cleanName = "Episode $episodeNumber"
+
+                episodes[absoluteUrl] = newEpisode(absoluteUrl) {
+                    this.name = cleanName
+                    this.episode = episodeNumber
                 }
-            )
-        }
+            }
 
-        return episodes.distinctBy { it.data }.ifEmpty {
-            listOf(
-                newEpisode(fallbackUrl) {
-                    this.name = "Episode 1"
-                    this.episode = 1
-                }
-            )
-        }
+        return episodes.values
+            .sortedBy { it.episode ?: 9999 }
+            .ifEmpty {
+                listOf(
+                    newEpisode(fallbackUrl) {
+                        this.name = seriesTitle
+                        this.episode = 1
+                    }
+                )
+            }
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -297,10 +306,9 @@ class Gojodesu : MainAPI() {
                 !it.equals("View All", true) &&
                 !it.equals("Next", true) &&
                 !it.equals("Berikutnya", true)
-        }?.cleanTitle() ?: return null
+        }?.cleanSearchTitle() ?: return null
 
         val poster = fixUrlNull(selectFirst("img")?.getImageAttr())
-
         val type = guessType(title, href, emptyList())
 
         return if (type == TvType.AnimeMovie) {
@@ -346,14 +354,22 @@ class Gojodesu : MainAPI() {
                 ?.groupValues
                 ?.getOrNull(1)
                 ?.toIntOrNull()
-            ?: Regex("""\b(\d+)\b""")
-                .find(title)
+            ?: Regex("""-episode-(\d+)""", RegexOption.IGNORE_CASE)
+                .find(href)
                 ?.groupValues
                 ?.getOrNull(1)
                 ?.toIntOrNull()
     }
 
-    private fun String.cleanTitle(): String {
+    private fun String.cleanSeriesTitle(): String {
+        return this
+            .replace(Regex("""(?i)^nonton\s+anime\s+"""), "")
+            .replace(Regex("""(?i)\s+subtitle\s+indonesia.*$"""), "")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+    }
+
+    private fun String.cleanSearchTitle(): String {
         return this
             .replace(Regex("""(?i)\s+episode\s+\d+.*$"""), "")
             .replace(Regex("""(?i)\s+subtitle\s+indonesia.*$"""), "")
