@@ -13,12 +13,11 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.cloudstream3.mainPageOf
+import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
-import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
-import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -88,18 +87,18 @@ class Gomunime : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = fixUrl(request.data.format(page.coerceAtLeast(1)))
+        val url = buildPageUrl(request.data, page)
         val document = app.get(url).document
 
         val home = document.select(
             "div.listupd article, " +
                 "div.listupd div.bs, " +
+                "div.listupd .bs, " +
                 "article.bs, " +
-                ".bsx, " +
-                ".listupd .bs, " +
-                "article"
-        ).mapNotNull { it.toSearchResult() }
-            .distinctBy { it.url }
+                ".bsx"
+        ).mapNotNull { element ->
+            element.toSearchResult()
+        }.distinctBy { it.url }
 
         return newHomePageResponse(
             request.name,
@@ -111,19 +110,30 @@ class Gomunime : MainAPI() {
                     "a.page-numbers:contains(»), " +
                     "a[href*='page=${page + 1}'], " +
                     "a[href*='/page/${page + 1}/']"
-            ) != null || home.isNotEmpty()
+            ) != null
         )
+    }
+
+    private fun buildPageUrl(data: String, page: Int): String {
+        val formatted = data.format(page.coerceAtLeast(1))
+        return when {
+            formatted.startsWith("http", true) -> formatted
+            formatted.startsWith("/") -> "$mainUrl$formatted"
+            else -> "$mainUrl/$formatted"
+        }
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
         val anchor = selectFirst(
-            "a[href], " +
-                ".bsx a[href], " +
-                "h2 a[href], " +
-                ".entry-title a[href]"
+            ".bsx > a[href], " +
+                "a.tip[href], " +
+                "a[href*='/anime/'], " +
+                "a[href]"
         ) ?: return null
 
-        val href = fixUrl(anchor.attr("href").trim())
+        val href = fixUrlNull(anchor.attr("href")) ?: return null
+
+        if (!href.contains("/anime/", true)) return null
 
         val title = listOf(
             selectFirst("div.tt")?.text()?.trim(),
@@ -131,29 +141,24 @@ class Gomunime : MainAPI() {
             selectFirst("h2")?.text()?.trim(),
             selectFirst(".entry-title")?.text()?.trim(),
             anchor.attr("title").trim(),
-            selectFirst("img[alt]")?.attr("alt")?.trim(),
-            anchor.text().trim()
+            selectFirst("img[alt]")?.attr("alt")?.trim()
         ).firstOrNull {
             !it.isNullOrBlank() &&
                 !it.equals("View All", true) &&
-                !it.equals("Next", true)
-        }?.cleanTitle()
-            ?: return null
+                !it.equals("Next", true) &&
+                !it.equals("Anime", true)
+        }?.cleanTitle() ?: return null
 
-        val poster = fixUrlNull(
-            selectFirst("img")?.getImageAttr()
-        )
+        val poster = fixUrlNull(selectFirst("img")?.getImageAttr())
 
         val type = getTypeFromUrlOrTitle(href, title)
 
-        return if (type == TvType.AnimeMovie) {
-            newMovieSearchResponse(title, href, TvType.AnimeMovie) {
-                this.posterUrl = poster
-            }
-        } else {
-            newTvSeriesSearchResponse(title, href, type) {
-                this.posterUrl = poster
-            }
+        return newAnimeSearchResponse(
+            title,
+            href,
+            type
+        ) {
+            this.posterUrl = poster
         }
     }
 
@@ -175,12 +180,14 @@ class Gomunime : MainAPI() {
             document.select(
                 "div.listupd article, " +
                     "div.listupd div.bs, " +
+                    "div.listupd .bs, " +
                     "article.bs, " +
-                    ".bsx, " +
-                    ".listupd .bs, " +
-                    "article"
-            ).mapNotNull { it.toSearchResult() }
-                .forEach { results[it.url] = it }
+                    ".bsx"
+            ).mapNotNull { element ->
+                element.toSearchResult()
+            }.forEach { item ->
+                results[item.url] = item
+            }
 
             if (results.isNotEmpty()) break
         }
