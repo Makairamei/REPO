@@ -8,7 +8,9 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.base64Decode
 import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.cloudstream3.mainPageOf
@@ -19,10 +21,13 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
+import com.lagradost.cloudstream3.utils.getAndUnpack
+import com.lagradost.cloudstream3.utils.getPacked
 import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 class Gojodesu : MainAPI() {
@@ -49,7 +54,9 @@ class Gojodesu : MainAPI() {
         "genres/comedy/page/%d/" to "Comedy",
         "genres/drama/page/%d/" to "Drama",
         "genres/ecchi/page/%d/" to "Ecchi",
+        "genres/erotica/page/%d/" to "Erotica",
         "genres/fantasy/page/%d/" to "Fantasy",
+        "genres/girls-love/page/%d/" to "Girls Love",
         "genres/horror/page/%d/" to "Horror",
         "genres/mystery/page/%d/" to "Mystery",
         "genres/romance/page/%d/" to "Romance",
@@ -64,18 +71,26 @@ class Gojodesu : MainAPI() {
         "season/fall-2025/page/%d/" to "Fall 2025",
         "season/summer-2025/page/%d/" to "Summer 2025",
         "season/spring-2025/page/%d/" to "Spring 2025",
+        "season/winter-2025/page/%d/" to "Winter 2025",
 
         "anime/page/%d/?order=latest&status=ongoing&sub=&type=" to "Ongoing",
         "anime/page/%d/?order=latest&status=completed&sub=&type=" to "Completed",
+        "anime/page/%d/?order=latest&status=&sub=&type=tv" to "TV Series",
         "anime/page/%d/?order=latest&status=&sub=&type=movie" to "Movie",
         "anime/page/%d/?order=latest&status=&sub=&type=ova" to "OVA",
         "anime/page/%d/?order=latest&status=&sub=&type=ona" to "ONA",
         "anime/page/%d/?order=latest&status=&sub=&type=special" to "Special"
     )
 
+    private val commonHeaders = mapOf(
+        "User-Agent" to USER_AGENT,
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7"
+    )
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = fixUrl(request.data.format(page.coerceAtLeast(1)))
-        val document = app.get(url).document
+        val document = app.get(url, headers = commonHeaders).document
 
         val items = document.select(
             "article, " +
@@ -111,7 +126,7 @@ class Gojodesu : MainAPI() {
 
         for (url in endpoints) {
             val document = runCatching {
-                app.get(url).document
+                app.get(url, headers = commonHeaders).document
             }.getOrNull() ?: continue
 
             document.select(
@@ -130,7 +145,7 @@ class Gojodesu : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val document = app.get(url).document
+        val document = app.get(url, headers = commonHeaders).document
 
         val rawTitle = document.selectFirst(
             "h1.entry-title, " +
@@ -194,96 +209,206 @@ class Gojodesu : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val response = app.get(data, referer = mainUrl)
-        val document = response.document
-        val links = linkedSetOf<String>()
-        var found = false
+        val visited = linkedSetOf<String>()
+        val foundM3u8 = linkedSetOf<String>()
+        val seedLinks = linkedSetOf<String>()
 
-        extractM3u8Urls(response.text).forEach { m3u8 ->
+        val episodeResponse = app.get(
+            data,
+            referer = mainUrl,
+            headers = commonHeaders
+        )
+
+        extractM3u8Urls(episodeResponse.text).forEach { foundM3u8.add(it) }
+        collectCandidateLinks(episodeResponse.document, episodeResponse.text, data, seedLinks)
+
+        // Fallback penting: halaman GojoDesu biasanya hanya punya link Download ke Kotakajaib.
+        episodeResponse.document.select("a:contains(Download), a[href*='kotakajaib']")
+            .forEach { a ->
+                val href = a.attr("href").trim()
+                if (href.isNotBlank()) seedLinks.add(normalizeAnyUrl(href, data))
+            }
+
+        seedLinks.forEach { link ->
+            deepCrawlForPlayback(
+                url = link,
+                referer = data,
+                visited = visited,
+                foundM3u8 = foundM3u8,
+                depth = 0
+            )
+        }
+
+        foundM3u8.forEach { m3u8 ->
             generateM3u8(
                 source = name,
                 streamUrl = m3u8,
                 referer = data
             ).forEach(callback)
-
-            found = true
         }
 
-        document.select(
-            "a[href*='kotakajaib.me'], " +
-                "a[href*='kotakajaib'], " +
-                "a:contains(Download)"
-        ).forEach { a ->
-            val href = a.attr("href").trim()
-            if (href.isNotBlank()) {
-                links.add(fixUrl(href))
-            }
+        if (foundM3u8.isNotEmpty()) return true
+
+        // Last resort: tetap lempar semua kandidat ke extractor bawaan/custom.
+        var sentFallback = false
+        seedLinks.forEach { link ->
+            loadExtractor(link, data, subtitleCallback, callback)
+            sentFallback = true
         }
 
-        document.select("select.mirror option[value]:not([disabled])")
-            .map { it.attr("value").trim() }
-            .filter {
-                it.isNotBlank() &&
-                    !it.contains("Select Video Server", true)
-            }
-            .forEach {
-                links.add(fixUrl(it))
-            }
+        return sentFallback
+    }
 
-        document.select(
-            "iframe[src], " +
-                "embed[src], " +
-                "source[src], " +
-                "video[src]"
-        ).forEach { element ->
-            val src = element.attr("src").trim()
-            if (src.isNotBlank()) {
-                links.add(httpsify(src))
-            }
+    private suspend fun deepCrawlForPlayback(
+        url: String,
+        referer: String,
+        visited: MutableSet<String>,
+        foundM3u8: MutableSet<String>,
+        depth: Int
+    ) {
+        if (depth > 5) return
+
+        val cleanUrl = normalizeAnyUrl(url, referer)
+        if (cleanUrl in visited) return
+        visited.add(cleanUrl)
+
+        val response = runCatching {
+            app.get(
+                cleanUrl,
+                referer = referer,
+                headers = commonHeaders,
+                allowRedirects = true
+            )
+        }.getOrNull() ?: return
+
+        val html = response.text
+        val document = response.document
+        val nextLinks = linkedSetOf<String>()
+
+        extractM3u8Urls(html).forEach { foundM3u8.add(it) }
+
+        val unpacked = runCatching {
+            if (!getPacked(html).isNullOrEmpty()) getAndUnpack(html) else null
+        }.getOrNull()
+
+        if (!unpacked.isNullOrBlank()) {
+            extractM3u8Urls(unpacked).forEach { foundM3u8.add(it) }
+            extractPossibleUrls(unpacked).forEach { nextLinks.add(normalizeAnyUrl(it, cleanUrl)) }
         }
 
-        links.forEach { link ->
-            if (link.contains("kotakajaib", true)) {
-                loadExtractor(
-                    link,
-                    data,
-                    subtitleCallback,
-                    callback
-                )
-                found = true
-                return@forEach
-            }
+        collectCandidateLinks(document, html, cleanUrl, nextLinks)
 
-            val linkResponse = runCatching {
-                app.get(link, referer = data)
+        // Decode data-frame khusus Kotakajaib.
+        document.select("[data-frame]").forEach { element ->
+            val encoded = element.attr("data-frame").trim()
+            if (encoded.isBlank()) return@forEach
+
+            val decoded = runCatching {
+                base64Decode(encoded).trim()
             }.getOrNull()
 
-            val m3u8s = linkResponse?.text
-                ?.let { extractM3u8Urls(it) }
-                .orEmpty()
-
-            if (m3u8s.isNotEmpty()) {
-                m3u8s.forEach { m3u8 ->
-                    generateM3u8(
-                        source = name,
-                        streamUrl = m3u8,
-                        referer = link
-                    ).forEach(callback)
-
-                    found = true
+            if (!decoded.isNullOrBlank()) {
+                if (decoded.contains(".m3u8", true)) {
+                    extractM3u8Urls(decoded).forEach { foundM3u8.add(it) }
+                } else {
+                    nextLinks.add(normalizeAnyUrl(decoded, cleanUrl))
                 }
-            } else {
-                loadExtractor(
-                    link,
-                    data,
-                    subtitleCallback,
-                    callback
-                )
-                found = true
             }
         }
 
-        return found
+        // Decode base64/atob umum.
+        extractBase64DecodedUrls(html).forEach { decoded ->
+            if (decoded.contains(".m3u8", true)) {
+                extractM3u8Urls(decoded).forEach { foundM3u8.add(it) }
+            } else {
+                nextLinks.add(normalizeAnyUrl(decoded, cleanUrl))
+            }
+        }
+
+        nextLinks
+            .filter { it !in visited }
+            .filter {
+                it.contains("kotakajaib", true) ||
+                    it.contains("turbosplayer", true) ||
+                    it.contains("strp2p", true) ||
+                    it.contains("rpmvid", true) ||
+                    it.contains("/file/", true) ||
+                    it.contains("/embed/", true) ||
+                    it.contains("/v/", true) ||
+                    it.contains(".m3u8", true)
+            }
+            .forEach { next ->
+                if (next.contains(".m3u8", true)) {
+                    foundM3u8.add(normalizeAnyUrl(next, cleanUrl))
+                } else {
+                    deepCrawlForPlayback(
+                        url = next,
+                        referer = cleanUrl,
+                        visited = visited,
+                        foundM3u8 = foundM3u8,
+                        depth = depth + 1
+                    )
+                }
+            }
+    }
+
+    private fun collectCandidateLinks(
+        document: Document,
+        html: String,
+        baseUrl: String,
+        out: MutableSet<String>
+    ) {
+        document.select(
+            "a[href], " +
+                "iframe[src], " +
+                "embed[src], " +
+                "source[src], " +
+                "video[src], " +
+                "[data-url], " +
+                "[data-src], " +
+                "[data-link]"
+        ).forEach { element ->
+            val raw = element.attr("href")
+                .ifBlank { element.attr("src") }
+                .ifBlank { element.attr("data-url") }
+                .ifBlank { element.attr("data-src") }
+                .ifBlank { element.attr("data-link") }
+                .trim()
+
+            if (raw.isBlank()) return@forEach
+
+            val normalized = normalizeAnyUrl(raw, baseUrl)
+
+            if (
+                normalized.contains("kotakajaib", true) ||
+                normalized.contains("turbosplayer", true) ||
+                normalized.contains("strp2p", true) ||
+                normalized.contains("rpmvid", true) ||
+                normalized.contains("/file/", true) ||
+                normalized.contains("/embed/", true) ||
+                normalized.contains("/v/", true) ||
+                normalized.contains(".m3u8", true)
+            ) {
+                out.add(normalized)
+            }
+        }
+
+        extractPossibleUrls(html).forEach { raw ->
+            val normalized = normalizeAnyUrl(raw, baseUrl)
+
+            if (
+                normalized.contains("kotakajaib", true) ||
+                normalized.contains("turbosplayer", true) ||
+                normalized.contains("strp2p", true) ||
+                normalized.contains("rpmvid", true) ||
+                normalized.contains("/file/", true) ||
+                normalized.contains("/embed/", true) ||
+                normalized.contains("/v/", true) ||
+                normalized.contains(".m3u8", true)
+            ) {
+                out.add(normalized)
+            }
+        }
     }
 
     private fun parseEpisodes(
@@ -386,11 +511,93 @@ class Gojodesu : MainAPI() {
     }
 
     private fun extractM3u8Urls(text: String): List<String> {
-        return Regex("""https?://[^"'\\\s<>]+\.m3u8[^"'\\\s<>]*""")
+        val candidates = linkedSetOf<String>()
+
+        Regex("""https?://[^"'\\\s<>]+\.m3u8[^"'\\\s<>]*""")
             .findAll(text)
             .map { it.value.cleanEscapedUrl() }
-            .distinct()
-            .toList()
+            .forEach { candidates.add(it) }
+
+        Regex("""https?%3A%2F%2F[^"'\\\s<>]+?\.m3u8[^"'\\\s<>]*""", RegexOption.IGNORE_CASE)
+            .findAll(text)
+            .map {
+                runCatching {
+                    URLDecoder.decode(it.value, "UTF-8")
+                }.getOrDefault(it.value)
+            }
+            .map { it.cleanEscapedUrl() }
+            .forEach { candidates.add(it) }
+
+        return candidates.toList()
+    }
+
+    private fun extractPossibleUrls(text: String): List<String> {
+        val urls = linkedSetOf<String>()
+
+        Regex("""https?:\\?/\\?/[^"'\\\s<>]+""")
+            .findAll(text)
+            .map { it.value.cleanEscapedUrl() }
+            .forEach { urls.add(it) }
+
+        Regex("""['"]((?:https?:)?//[^'"]+)['"]""")
+            .findAll(text)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .map { it.cleanEscapedUrl() }
+            .forEach { urls.add(it) }
+
+        Regex("""(?:file|src|url|source|hls|video)\s*[:=]\s*['"]([^'"]+)['"]""")
+            .findAll(text)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .map { it.cleanEscapedUrl() }
+            .forEach { urls.add(it) }
+
+        return urls.toList()
+    }
+
+    private fun extractBase64DecodedUrls(text: String): List<String> {
+        val decoded = linkedSetOf<String>()
+
+        Regex("""atob\(['"]([^'"]{12,})['"]\)""")
+            .findAll(text)
+            .mapNotNull { match ->
+                runCatching {
+                    base64Decode(match.groupValues[1]).trim()
+                }.getOrNull()
+            }
+            .forEach { decoded.add(it.cleanEscapedUrl()) }
+
+        Regex("""['"]([A-Za-z0-9+/=]{40,})['"]""")
+            .findAll(text)
+            .mapNotNull { match ->
+                runCatching {
+                    base64Decode(match.groupValues[1]).trim()
+                }.getOrNull()
+            }
+            .filter {
+                it.contains("http", true) ||
+                    it.contains(".m3u8", true) ||
+                    it.contains("turbosplayer", true)
+            }
+            .forEach { decoded.add(it.cleanEscapedUrl()) }
+
+        return decoded.toList()
+    }
+
+    private fun normalizeAnyUrl(url: String, baseUrl: String): String {
+        val clean = url.cleanEscapedUrl()
+
+        return when {
+            clean.startsWith("http", true) -> clean
+            clean.startsWith("//") -> "https:$clean"
+            clean.startsWith("/") -> {
+                val origin = Regex("""^https?://[^/]+""").find(baseUrl)?.value ?: mainUrl
+                "$origin$clean"
+            }
+            else -> {
+                val origin = Regex("""^https?://[^/]+""").find(baseUrl)?.value ?: mainUrl
+                "$origin/$clean"
+            }
+        }
     }
 
     private fun Element.getImageAttr(): String {
