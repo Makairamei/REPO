@@ -1,4 +1,4 @@
-package com.kraptor
+package com.sad25kag.fitnakedgirls
 
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.LoadResponse

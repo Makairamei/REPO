@@ -1,4 +1,4 @@
-package com.kraptor
+package com.sad25kag.fitnakedgirls
 
 import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin

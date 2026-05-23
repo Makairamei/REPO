@@ -1,4 +1,4 @@
-package com.filmapik
+package com.sad25kag.filmapik
 
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.SubtitleFile

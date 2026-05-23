@@ -1,4 +1,4 @@
-version = 9
+version = 10
 
 cloudstream {
     description = "DramaBox - drama pendek Asia dengan subtitle/dub Indonesia."

@@ -1,4 +1,4 @@
-package com.filmkita
+package com.sad25kag.filmkita
 
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.USER_AGENT

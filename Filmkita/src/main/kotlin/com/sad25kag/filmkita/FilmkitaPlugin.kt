@@ -1,4 +1,4 @@
-package com.filmkita
+package com.sad25kag.filmkita
 
 import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin

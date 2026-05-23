@@ -1,4 +1,4 @@
-package com.filmkita
+package com.sad25kag.filmkita
 
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageResponse

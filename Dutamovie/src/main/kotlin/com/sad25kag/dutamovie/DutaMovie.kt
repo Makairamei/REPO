@@ -21,7 +21,7 @@ open class DutaMovie : MainAPI() {
     }
     override var mainUrl = "https://malcontentgames.com"
     private var directUrl: String? = null
-    override var name = "DutaMovie🎉"
+    override var name = "DutaMovie"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override val hasDownloadSupport = true
