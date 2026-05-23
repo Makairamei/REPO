@@ -1,4 +1,4 @@
-package com.idlix
+package com.BetbetMiro.idlix
 
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.Episode
@@ -15,7 +15,6 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
@@ -376,8 +375,8 @@ class IdlixProvider : MainAPI() {
                 "a[href*='youtu.be'], " +
                 "iframe[src*='youtube.com'], " +
                 "iframe[src*='youtu.be']"
-        )?.let {
-            it.attr("href").ifBlank { _ -> it.attr("src") }
+        )?.let { element ->
+            element.attr("href").ifBlank { element.attr("src") }
         }?.takeIf { it.isNotBlank() }
 
         val recommendations = document.select(
@@ -530,9 +529,7 @@ class IdlixProvider : MainAPI() {
             addCandidate(raw, data, directLinks, embedLinks)
         }
 
-        document.select(
-            "a[href]"
-        ).forEach { element ->
+        document.select("a[href]").forEach { element ->
             val href = element.attr("href").trim()
             val text = element.text().lowercase()
 

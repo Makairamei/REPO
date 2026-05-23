@@ -1,4 +1,4 @@
-package com.idlix
+package com.BetbetMiro.idlix
 
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.USER_AGENT
@@ -205,8 +205,8 @@ open class HtmlMediaExtractor : ExtractorApi() {
                 )
 
                 if (!success) {
-                    runCatching {
-                        val nested = app.get(
+                    val nested = runCatching {
+                        app.get(
                             embed,
                             referer = fixedUrl,
                             headers = mapOf(
@@ -216,9 +216,12 @@ open class HtmlMediaExtractor : ExtractorApi() {
                             ),
                             timeout = 30L
                         ).text.cleanEscaped()
+                    }.getOrNull().orEmpty()
 
+                    if (nested.isNotBlank()) {
                         extractPlayableUrls(nested).forEach { raw ->
                             val fixed = normalizeUrl(raw, embed).replace(".txt", ".m3u8")
+
                             if (!isAdUrl(fixed) && (isHlsLike(fixed) || fixed.contains(".mp4", true))) {
                                 emitVideo(
                                     source = name,
@@ -228,6 +231,8 @@ open class HtmlMediaExtractor : ExtractorApi() {
                                 )
                             }
                         }
+
+                        extractSubtitles(nested, domain, subtitleCallback)
                     }
                 }
             }
@@ -249,6 +254,56 @@ open class HtmlMediaExtractor : ExtractorApi() {
         when {
             isHlsLike(fixed) || fixed.contains(".mp4", true) -> directLinks.add(fixed)
             fixed.startsWith("http", true) -> embedLinks.add(fixed)
+        }
+    }
+
+    private suspend fun extractSubtitles(
+        text: String,
+        domain: String,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ) {
+        val clean = text.cleanEscaped()
+
+        Regex(
+            """"(?:lang|label)"\s*:\s*"([^"]+)"[^}]*?"(?:path|url|file)"\s*:\s*"([^"]+)"""",
+            RegexOption.IGNORE_CASE
+        ).findAll(clean).forEach { match ->
+            val label = match.groupValues[1].ifBlank { "Subtitle" }
+            val rawUrl = match.groupValues[2].cleanEscaped()
+
+            val subUrl = when {
+                rawUrl.startsWith("http", true) -> rawUrl
+                rawUrl.startsWith("//") -> "https:$rawUrl"
+                else -> domain.trimEnd('/') + "/" + rawUrl.trimStart('/')
+            }
+
+            subtitleCallback(
+                newSubtitleFile(
+                    label,
+                    subUrl
+                )
+            )
+        }
+
+        Regex(
+            """\\"(?:lang|label)\\":\\"([^\\"]+)\\"[^}]*?\\"(?:path|url|file)\\":\\"([^\\"]+)\\"""",
+            RegexOption.IGNORE_CASE
+        ).findAll(clean).forEach { match ->
+            val label = match.groupValues[1].ifBlank { "Subtitle" }
+            val rawUrl = match.groupValues[2].cleanEscaped()
+
+            val subUrl = when {
+                rawUrl.startsWith("http", true) -> rawUrl
+                rawUrl.startsWith("//") -> "https:$rawUrl"
+                else -> domain.trimEnd('/') + "/" + rawUrl.trimStart('/')
+            }
+
+            subtitleCallback(
+                newSubtitleFile(
+                    label,
+                    subUrl
+                )
+            )
         }
     }
 }
@@ -344,56 +399,6 @@ private fun extractPlayableUrls(text: String): List<String> {
         .forEach { urls.add(it) }
 
     return urls.toList()
-}
-
-private fun extractSubtitles(
-    text: String,
-    domain: String,
-    subtitleCallback: (SubtitleFile) -> Unit
-) {
-    val clean = text.cleanEscaped()
-
-    Regex(
-        """"(?:lang|label)"\s*:\s*"([^"]+)"[^}]*?"(?:path|url|file)"\s*:\s*"([^"]+)"""",
-        RegexOption.IGNORE_CASE
-    ).findAll(clean).forEach { match ->
-        val label = match.groupValues[1].ifBlank { "Subtitle" }
-        val rawUrl = match.groupValues[2].cleanEscaped()
-
-        val subUrl = when {
-            rawUrl.startsWith("http", true) -> rawUrl
-            rawUrl.startsWith("//") -> "https:$rawUrl"
-            else -> domain.trimEnd('/') + "/" + rawUrl.trimStart('/')
-        }
-
-        subtitleCallback(
-            newSubtitleFile(
-                label,
-                subUrl
-            )
-        )
-    }
-
-    Regex(
-        """\\"(?:lang|label)\\":\\"([^\\"]+)\\"[^}]*?\\"(?:path|url|file)\\":\\"([^\\"]+)\\"""",
-        RegexOption.IGNORE_CASE
-    ).findAll(clean).forEach { match ->
-        val label = match.groupValues[1].ifBlank { "Subtitle" }
-        val rawUrl = match.groupValues[2].cleanEscaped()
-
-        val subUrl = when {
-            rawUrl.startsWith("http", true) -> rawUrl
-            rawUrl.startsWith("//") -> "https:$rawUrl"
-            else -> domain.trimEnd('/') + "/" + rawUrl.trimStart('/')
-        }
-
-        subtitleCallback(
-            newSubtitleFile(
-                label,
-                subUrl
-            )
-        )
-    }
 }
 
 private fun normalizeUrl(
