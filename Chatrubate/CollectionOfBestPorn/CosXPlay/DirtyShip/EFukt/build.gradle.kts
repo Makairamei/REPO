@@ -1,9 +1,8 @@
-// ! Bu araç @Kraptor123 tarafından | @Cs-GizliKeyif için yazılmıştır.
-version = 5
+version = 6
 
 cloudstream {
     authors     = listOf("kraptor")
-    language    = "en"
+    language    = "id"
     description = "Adult humor for adults, Makers of Lulz. Shocking Humor, Porn bloopers, Porn Fails, Cam Whores, Amateur Porn and more."
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")

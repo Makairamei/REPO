@@ -1,10 +1,9 @@
-// ! Bu araç @Kraptor123 tarafından | @Cs-GizliKeyif için yazılmıştır.
-version = 9
+version = 10
 
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "Dirtyship.com is the hub of daily free leaked nudes from the hottest female Twitch, Snapchat, YouTube, Instagram, Patreon models, Cosplay, Gamer Girls, and streamers. Choose from the biggest selection of Sexy Leaked Nude Photos, Accidental Slips, Bikini Photos, Banned Streamers and Patreon Creators."
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")

@@ -1,8 +1,8 @@
-version = 4
+version = 5
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "Watch the biggest collection of the best free high quality hd porn videos. There are over 1.5 million of the best porno tube movies completely FREE for you!"
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")
