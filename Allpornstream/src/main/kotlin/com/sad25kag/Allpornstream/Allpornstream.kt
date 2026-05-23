@@ -30,7 +30,6 @@ class Allpornstream : MainAPI() {
 
     override val mainPage = mainPageOf(
         "${mainUrl}/categories/1080-p" to "1080 P",
-        "${mainUrl}/categories/4k-porn" to "4K Porn",
         "${mainUrl}/categories/60-fps" to "60 FPS",
         "${mainUrl}/categories/amateur" to "Amateur",
         "${mainUrl}/categories/anal" to "Anal",
