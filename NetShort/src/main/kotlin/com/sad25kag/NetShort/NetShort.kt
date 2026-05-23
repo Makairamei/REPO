@@ -854,7 +854,7 @@ class NetShort : MainAPI() {
         }
     }
 
-    private fun emitDirectLink(
+    private suspend fun emitDirectLink(
         link: String,
         referer: String,
         callback: (ExtractorLink) -> Unit
