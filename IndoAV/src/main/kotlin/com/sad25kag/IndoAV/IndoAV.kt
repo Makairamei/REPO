@@ -643,7 +643,7 @@ class IndoAV : MainAPI() {
             )
 
             collectIndoAvPlayer(
-                pageUrl = pageUrl,
+                pageUrl = embed,
                 document = embedDocument,
                 directLinks = directLinks,
                 embedLinks = embedLinks
@@ -783,11 +783,9 @@ class IndoAV : MainAPI() {
         directLinks: MutableSet<String>,
         embedLinks: MutableSet<String>
     ) {
-        val pageSlug = pageUrl
-            .substringAfter("/video/", "")
-            .substringAfter("/e/", "")
-            .substringBefore("?")
-            .trim('/')
+        val pageInfo = extractIndoAvCodeAndStream(pageUrl)
+        val pageCode = pageInfo.first
+        val pageStream = pageInfo.second
 
         val tokenUrls = linkedSetOf<String>()
 
@@ -818,11 +816,11 @@ class IndoAV : MainAPI() {
                 val streamName = element.attr("aria-label")
                     .replace(Regex("""(?i)^Stream\s+"""), "")
                     .trim()
-                    .ifBlank { "EM" }
+                    .ifBlank { pageStream.ifBlank { "EM" } }
 
                 val fileCode = element.attr("data-filecode")
                     .trim()
-                    .ifBlank { pageSlug }
+                    .ifBlank { pageCode }
 
                 if (fileCode.isNotBlank()) {
                     jobs.add(fileCode to streamName)
@@ -830,26 +828,24 @@ class IndoAV : MainAPI() {
             }
         }
 
-        if (pageSlug.isNotBlank()) {
-            jobs.add(pageSlug to "EM")
+        if (pageCode.isNotBlank()) {
+            jobs.add(pageCode to pageStream.ifBlank { "EM" })
         }
 
         tokenUrls.forEach { tokenUrl ->
-            val tokenSlug = tokenUrl
-                .substringAfter("/e/", "")
-                .substringAfter("/embed/", "")
-                .substringBefore("?")
-                .trim('/')
+            val tokenInfo = extractIndoAvCodeAndStream(tokenUrl)
+            val tokenCode = tokenInfo.first
+            val tokenStream = tokenInfo.second
 
-            if (tokenSlug.isNotBlank()) {
-                jobs.add(tokenSlug to "EM")
+            if (tokenCode.isNotBlank()) {
+                jobs.add(tokenCode to tokenStream.ifBlank { "EM" })
             }
         }
 
         jobs.forEach { (code, streamName) ->
             val payload = buildIndoAvLoadPayload(
                 code = code,
-                streamName = streamName
+                streamName = streamName.ifBlank { "EM" }
             )
 
             val responseText = runCatching {
@@ -878,15 +874,29 @@ class IndoAV : MainAPI() {
             listOf(responseText, decrypted)
                 .filter { it.isNotBlank() }
                 .distinct()
-                .forEach { playerHtml ->
+                .forEach { playerPayload ->
                     parsePlayerResponse(
-                        text = playerHtml,
+                        text = playerPayload,
                         baseUrl = pageUrl,
                         directLinks = directLinks,
                         embedLinks = embedLinks
                     )
 
-                    val playerDocument = Jsoup.parse(playerHtml)
+                    if (
+                        playerPayload.startsWith("http", true) ||
+                        playerPayload.contains(".m3u8", true) ||
+                        playerPayload.contains(".mp4", true) ||
+                        playerPayload.contains(".webm", true)
+                    ) {
+                        addCandidate(
+                            raw = playerPayload,
+                            baseUrl = pageUrl,
+                            directLinks = directLinks,
+                            embedLinks = embedLinks
+                        )
+                    }
+
+                    val playerDocument = Jsoup.parse(playerPayload)
 
                     collectCandidatesFromDocument(
                         document = playerDocument,
@@ -895,7 +905,7 @@ class IndoAV : MainAPI() {
                         embedLinks = embedLinks
                     )
 
-                    extractPlayableUrls(playerHtml).forEach { raw ->
+                    extractPlayableUrls(playerPayload).forEach { raw ->
                         addCandidate(
                             raw = raw,
                             baseUrl = pageUrl,
@@ -904,6 +914,42 @@ class IndoAV : MainAPI() {
                         )
                     }
                 }
+        }
+    }
+
+    private fun extractIndoAvCodeAndStream(url: String): Pair<String, String> {
+        val path = runCatching {
+            URI(url).path
+        }.getOrDefault(url.substringAfter(mainUrl, ""))
+
+        val parts = path
+            .trim('/')
+            .split("/")
+            .filter { it.isNotBlank() }
+
+        return when {
+            parts.size >= 4 &&
+                parts[0].equals("video", true) &&
+                parts[1].equals("embed", true) -> {
+                parts[2] to parts[3]
+            }
+
+            parts.size >= 2 &&
+                parts[0].equals("e", true) -> {
+                parts[1] to "EM"
+            }
+
+            parts.size >= 2 &&
+                parts[0].equals("d", true) -> {
+                parts[1] to "EM"
+            }
+
+            parts.size >= 2 &&
+                parts[0].equals("video", true) -> {
+                parts[1] to "EM"
+            }
+
+            else -> "" to "EM"
         }
     }
 
@@ -958,9 +1004,19 @@ class IndoAV : MainAPI() {
                 Regex(""""([^"]+)"""")
                     .findAll(arrayText)
                     .map { it.groupValues[1].cleanEscaped() }
-                    .filter { it.startsWith("http", true) }
+                    .filter { it.startsWith("http", true) || it.startsWith("/", true) }
+                    .map { normalizeUrl(it, mainUrl) }
                     .forEach { results.add(it) }
             }
+
+        Regex(
+            """"(?:u|url|src|file|source)"\s*:\s*"([^"]+)"""",
+            RegexOption.IGNORE_CASE
+        ).findAll(decoded)
+            .map { it.groupValues[1].cleanEscaped() }
+            .filter { it.startsWith("http", true) || it.startsWith("/", true) }
+            .map { normalizeUrl(it, mainUrl) }
+            .forEach { results.add(it) }
 
         extractPlayableUrls(decoded).forEach { results.add(it) }
 
@@ -975,9 +1031,7 @@ class IndoAV : MainAPI() {
     }
 
     private fun indoAvSecretKey(): String {
-        val encoded = "rqpSaEddZ156f342cjwOD8vc4/SYtI0ILIo5UUj45apkqA06FzRKvr92GErrdKGZozMV1L52EueOl7B7yO1efjk8uBhSzLOf"
-        val once = base64DecodeBinary(encoded)
-        return base64DecodeBinary(once)
+        return "AD()*@Eak2930:F><AFZxmvnyucnf03-=+!@%(^_#%&)$*(%akhad"
     }
 
     private fun reverseToken(value: String): String {
