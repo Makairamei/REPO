@@ -153,7 +153,7 @@ Terima kasih untuk:
 - [CloudStream](https://github.com/recloudstream/cloudstream)
 - Semua developer provider dan extractor
 - Komunitas open source
-- Pengguna yang ikut membantu testing dan melaporkan error
+- Keluarga dan teman serta pengguna anonim yang ikut membantu testing dan melaporkan error
 - Gradle, walau sering bikin kepala ingin restart hidup 😭
 
 ---
