@@ -20,6 +20,7 @@ class HidoristreamProviderPlugin : Plugin() {
         registerExtractorAPI(Ryderjet())
 
         registerExtractorAPI(Hglink())
+        registerExtractorAPI(Hgcloud())
         registerExtractorAPI(Ghbrisk())
         registerExtractorAPI(Dhcplay())
 

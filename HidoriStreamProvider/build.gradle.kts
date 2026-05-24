@@ -1,4 +1,4 @@
-version = 5
+version = 7
 
 cloudstream {
     description = "HidoriStream — Streaming Anime Subtitle Indonesia"
@@ -20,5 +20,5 @@ cloudstream {
         "OVA"
     )
 
-    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://v3.hidoristream.online&size=%size%"
+    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://hidoristream.my.id&size=%size%"
 }
