@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.AppUtils.parseJson
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 class Chatrubate : MainAPI() {
@@ -117,48 +119,81 @@ class Chatrubate : MainAPI() {
         val username = roomUrl.trimEnd('/').substringAfterLast("/")
         if (username.isBlank()) return false
 
-        val apiUrl = "$mainUrl/api/chatvideocontext/$username/"
+        val streamCandidates = linkedSetOf<String>()
 
-        val response = app.get(
-            apiUrl,
-            headers = apiHeaders,
-            referer = roomUrl
+        suspend fun fetchText(url: String, referer: String, json: Boolean = false): String? {
+            return runCatching {
+                app.get(
+                    url,
+                    headers = if (json) apiHeaders else htmlHeaders,
+                    referer = referer,
+                    timeout = 30L
+                ).text
+            }.getOrNull()
+        }
+
+        // 1) Current room HTML often contains the live HLS inside initialRoomDossier.
+        val roomHtml = fetchText(roomUrl, "$mainUrl/", json = false)
+        if (!roomHtml.isNullOrBlank()) {
+            streamCandidates.addAll(extractM3u8Candidates(roomHtml))
+            streamCandidates.addAll(extractInitialRoomDossierStreams(roomHtml))
+        }
+
+        // 2) Keep the old API path, but do not rely on it as the only source anymore.
+        val apiUrls = listOf(
+            "$mainUrl/api/chatvideocontext/$username/",
+            "$mainUrl/api/chatvideocontext/$username/?room=$username",
+            "$mainUrl/api/chatvideocontext/$username/?format=json"
         )
 
-        Log.d("kraptor_$name", "streamInfo status = ${response.code}")
+        for (apiUrl in apiUrls) {
+            if (streamCandidates.isNotEmpty()) break
 
-        val parsed = response.parsedSafe<ChatResponse>()
-        val apiStream = parsed?.hlsSource
-            ?.takeIf { it.isNotBlank() }
-            ?: parsed?.hlsSourceCamel
-                ?.takeIf { it.isNotBlank() }
+            val responseText = fetchText(apiUrl, roomUrl, json = true) ?: continue
+            val parsed = runCatching {
+                parseJson<ChatResponse>(responseText)
+            }.getOrNull()
 
-        val fallbackStream = apiStream ?: extractM3u8FromText(response.text)
+            listOf(
+                parsed?.hlsSource,
+                parsed?.hlsSourceCamel,
+                parsed?.hlsSourceUrl,
+                parsed?.streamUrl
+            ).forEach { stream ->
+                cleanStreamUrl(stream)?.let { streamCandidates.add(it) }
+            }
 
-        if (fallbackStream.isNullOrBlank()) {
+            streamCandidates.addAll(extractM3u8Candidates(responseText))
+        }
+
+        if (streamCandidates.isEmpty()) {
+            Log.d("kraptor_$name", "No playable HLS found for $username")
             return false
         }
 
-        callback.invoke(
-            newExtractorLink(
-                source = name,
-                name = "$name - Live",
-                url = fallbackStream,
-                type = ExtractorLinkType.M3U8
-            ) {
-                this.referer = roomUrl
-                this.quality = Qualities.Unknown.value
-                this.headers = mapOf(
-                    "Accept" to "*/*",
-                    "User-Agent" to USER_AGENT,
-                    "Referer" to roomUrl,
-                    "Origin" to mainUrl,
-                    "X-Requested-With" to "XMLHttpRequest"
-                )
-            }
-        )
+        var emitted = false
+        streamCandidates.distinct().forEach { streamUrl ->
+            callback.invoke(
+                newExtractorLink(
+                    source = name,
+                    name = "$name - Live",
+                    url = streamUrl,
+                    type = ExtractorLinkType.M3U8
+                ) {
+                    this.referer = roomUrl
+                    this.quality = inferQuality(streamUrl)
+                    this.headers = mapOf(
+                        "Accept" to "*/*",
+                        "User-Agent" to USER_AGENT,
+                        "Referer" to roomUrl,
+                        "Origin" to mainUrl
+                    )
+                }
+            )
+            emitted = true
+        }
 
-        return true
+        return emitted
     }
 
     private fun Room.toLiveSearchResult(): SearchResponse? {
@@ -190,24 +225,130 @@ class Chatrubate : MainAPI() {
         }.substringBefore("?")
     }
 
-    private fun extractM3u8FromText(text: String): String? {
-        val patterns = listOf(
-            Regex(""""hls_source"\s*:\s*"([^"]+\.m3u8[^"]*)""""),
-            Regex(""""hlsSource"\s*:\s*"([^"]+\.m3u8[^"]*)""""),
-            Regex("""(https?:\\?/\\?/[^"'\s<>]+\.m3u8[^"'\s<>]*)"""),
-            Regex("""(https?://[^"'\s<>]+\.m3u8[^"'\s<>]*)""")
+    private fun extractInitialRoomDossierStreams(html: String): List<String> {
+        val results = linkedSetOf<String>()
+
+        val dossierPatterns = listOf(
+            Regex("""initialRoomDossier\s*=\s*\"((?:\\.|[^\"\\])*)\"""),
+            Regex("""initialRoomDossier\s*=\s*'((?:\\.|[^'\\])*)'"""),
+            Regex("""initialRoomDossier\s*=\s*(\{.*?\})\s*;""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
         )
 
-        return patterns.firstNotNullOfOrNull { pattern ->
-            pattern.find(text)?.groupValues?.getOrNull(1)
-                ?.replace("\\u002F", "/")
-                ?.replace("\\/", "/")
+        dossierPatterns.forEach { pattern ->
+            pattern.findAll(html).forEach { match ->
+                val raw = match.groupValues.getOrNull(1).orEmpty()
+                if (raw.isBlank()) return@forEach
+
+                val decoded = decodePossibleJsonString(raw)
+                results.addAll(extractM3u8Candidates(decoded))
+            }
+        }
+
+        return results.toList()
+    }
+
+    private fun extractM3u8Candidates(text: String): List<String> {
+        val results = linkedSetOf<String>()
+        val variants = linkedSetOf<String>()
+
+        variants.add(text)
+        variants.add(decodePossibleJsonString(text))
+        runCatching { URLDecoder.decode(text, "UTF-8") }
+            .getOrNull()
+            ?.let { variants.add(it) }
+
+        val fieldPatterns = listOf(
+            Regex("""\"(?:hls_source|hlsSource|hlsSourceUrl|stream_url|streamUrl|source)\"\s*:\s*\"([^\"]+?\.m3u8[^\"]*)\""", RegexOption.IGNORE_CASE),
+            Regex("""'(?:hls_source|hlsSource|hlsSourceUrl|stream_url|streamUrl|source)'\s*:\s*'([^']+?\.m3u8[^']*)'""", RegexOption.IGNORE_CASE)
+        )
+
+        val urlPatterns = listOf(
+            Regex("""https?:\\?/\\?/[^\"'\s<>]+?\.m3u8[^\"'\s<>]*""", RegexOption.IGNORE_CASE),
+            Regex("""https?://[^\"'\s<>]+?\.m3u8[^\"'\s<>]*""", RegexOption.IGNORE_CASE),
+            Regex("""//[^\"'\s<>]+?\.m3u8[^\"'\s<>]*""", RegexOption.IGNORE_CASE),
+            Regex("""https?%3A%2F%2F[^\"'\s<>]+?\.m3u8[^\"'\s<>]*""", RegexOption.IGNORE_CASE)
+        )
+
+        variants.forEach { variant ->
+            fieldPatterns.forEach { pattern ->
+                pattern.findAll(variant).forEach { match ->
+                    cleanStreamUrl(match.groupValues.getOrNull(1))?.let { results.add(it) }
+                }
+            }
+
+            urlPatterns.forEach { pattern ->
+                pattern.findAll(variant).forEach { match ->
+                    cleanStreamUrl(match.value)?.let { results.add(it) }
+                }
+            }
+        }
+
+        return results.toList()
+    }
+
+    private fun decodePossibleJsonString(raw: String): String {
+        var result = raw
+            .replace("\\u002F", "/")
+            .replace("\\u002f", "/")
+            .replace("\\u003A", ":")
+            .replace("\\u003a", ":")
+            .replace("\\u0026", "&")
+            .replace("\\u003D", "=")
+            .replace("\\u003d", "=")
+            .replace("\\/", "/")
+            .replace("\\\"", "\"")
+            .replace("&amp;", "&")
+            .replace("&#038;", "&")
+            .replace("&quot;", "\"")
+
+        if (result.contains("%3A", true) || result.contains("%2F", true)) {
+            result = runCatching { URLDecoder.decode(result, "UTF-8") }.getOrDefault(result)
+        }
+
+        return result
+    }
+
+    private fun cleanStreamUrl(raw: String?): String? {
+        var clean = raw?.trim().orEmpty()
+        if (clean.isBlank()) return null
+
+        clean = decodePossibleJsonString(clean)
+            .trim()
+            .trim('"', '\'', ',', ';')
+            .replace("\\", "")
+
+        if (clean.startsWith("//")) clean = "https:$clean"
+
+        if (!clean.startsWith("http://", true) && !clean.startsWith("https://", true)) return null
+        if (!clean.contains(".m3u8", true)) return null
+
+        // Strip HTML/script leftovers without removing valid query parameters.
+        clean = clean.substringBefore("</")
+            .substringBefore("<")
+            .substringBefore(" ")
+            .trim()
+
+        return clean
+    }
+
+    private fun inferQuality(url: String): Int {
+        return when {
+            url.contains("2160", true) || url.contains("4k", true) -> 2160
+            url.contains("1440", true) -> 1440
+            url.contains("1080", true) -> 1080
+            url.contains("720", true) -> 720
+            url.contains("480", true) -> 480
+            url.contains("360", true) -> 360
+            url.contains("240", true) -> 240
+            else -> Qualities.Unknown.value
         }
     }
 
     data class ChatResponse(
         @JsonProperty("hls_source") val hlsSource: String? = null,
         @JsonProperty("hlsSource") val hlsSourceCamel: String? = null,
+        @JsonProperty("hls_source_url") val hlsSourceUrl: String? = null,
+        @JsonProperty("stream_url") val streamUrl: String? = null,
         @JsonProperty("broadcaster_username") val username: String? = null
     )
 
