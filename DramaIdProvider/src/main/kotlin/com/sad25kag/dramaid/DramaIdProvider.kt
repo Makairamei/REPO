@@ -236,7 +236,7 @@ class DramaIdProvider : MainAPI() {
             }
         }
 
-        fun collectFromDocument(doc: Document, html: String, refererUrl: String) {
+        suspend fun collectFromDocument(doc: Document, html: String, refererUrl: String) {
             doc.select(
                 ".streaming_load[data], " +
                     ".resolusi-list li[data], " +
