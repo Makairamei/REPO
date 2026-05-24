@@ -1,7 +1,7 @@
-version = 5
+version = 6
 
 cloudstream {
-    description = "BioskopKeren / keBioskop21 — Film dan Drama Subtitle Indonesia"
+    description = "BioskopKeren / keBioskop21 — Nonton Film dan Series Subtitle Indonesia"
     language = "id"
     authors = listOf("BetbetMiro")
 
