@@ -21,6 +21,7 @@ class GudangFilmPlugin : Plugin() {
 
         registerExtractorAPI(Hglink())
         registerExtractorAPI(Ghbrisk())
+        registerExtractorAPI(Hgcloud())
         registerExtractorAPI(Dhcplay())
 
         registerExtractorAPI(Streamcasthub())

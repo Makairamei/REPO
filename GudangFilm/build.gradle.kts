@@ -1,9 +1,9 @@
-version = 3
+version = 4
 
 cloudstream {
     authors = listOf("sad25kag", "BetbetMiro")
     language = "id"
-    description = "Provider CloudStream untuk GudangFilm / DutaMovie source."
+    description = "Provider CloudStream untuk GudangFilm / Dutamovie21 source."
     status = 1
 
     tvTypes = listOf(
@@ -13,5 +13,5 @@ cloudstream {
         "AsianDrama"
     )
 
-    iconUrl = "https://www.google.com/s2/favicons?domain=malcontentgames.com&sz=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=itoshii-movie.com&sz=%size%"
 }
