@@ -26,6 +26,7 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URI
@@ -57,39 +58,75 @@ class Gerakin21 : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        "" to "Terbaru",
-        "trending/" to "Trending",
-        "movies/" to "Movies",
-        "tv-series/" to "TV Series",
+        "" to "Update Terbaru",
 
-        "genre/action/" to "Action",
-        "genre/adventure/" to "Adventure",
-        "genre/animation/" to "Animation",
-        "genre/comedy/" to "Comedy",
-        "genre/crime/" to "Crime",
-        "genre/drama/" to "Drama",
-        "genre/family/" to "Family",
-        "genre/fantasy/" to "Fantasy",
-        "genre/history/" to "History",
-        "genre/horror/" to "Horror",
-        "genre/mystery/" to "Mystery",
-        "genre/romance/" to "Romance",
-        "genre/science-fiction/" to "Sci-Fi",
-        "genre/thriller/" to "Thriller",
-        "genre/war/" to "War",
+        // Current Gerakin21 menu structure.
+        "category/movie/" to "Semua Film",
+        "category/superhero/" to "Superhero",
+        "category/sweet/" to "Sweet",
+        "category/anime/" to "Anime",
+
+        "tv/" to "Semua Serial",
+        "quality/ongoing/" to "Serial On-Going",
+        "quality/end/" to "Serial END",
+        "category/serial-indonesia/" to "Serial Indonesia",
+        "category/serial-china/" to "Serial China",
+        "category/serial-korea/" to "Serial Korea",
+        "category/serial-thailand/" to "Serial Thailand",
+
+        // Film semi rows from the active site menu.
+        "category/barat/" to "Semi Barat",
+        "category/brother-musang/" to "Brother Musang",
+        "category/indo-lokal/" to "Indo Lokal",
+        "category/jav-sub-indo/" to "Jepang JAV",
+        "category/pinoy/" to "Pinoy",
+        "category/semi-korea/" to "Semi Korea",
+        "vivamax/" to "Vivamax",
+        "category/kelas-bintang/" to "Kelas Bintang",
+        "category/togefilm/" to "TOGEFILM",
+
+        // Genre rows use /category/* on the current site, not /genre/*.
+        "category/action/" to "Action",
+        "category/adventure/" to "Adventure",
+        "category/comedy/" to "Comedy",
+        "category/crime/" to "Crime",
+        "category/drama/" to "Drama",
+        "category/fantasy/" to "Fantasy",
+        "category/history/" to "History",
+        "category/horor/" to "Horror",
+        "category/horror/" to "Horror Alt",
+        "category/mystery/" to "Mystery",
+        "category/romance/" to "Romance",
+        "category/sci-fi/" to "Sci-Fi",
+        "category/science-fiction/" to "Science Fiction",
+        "category/thriller/" to "Thriller",
 
         "country/indonesia/" to "Indonesia",
-        "country/united-states/" to "USA",
-        "country/korea/" to "Korea",
-        "country/japan/" to "Japan",
+        "country/australia/" to "Australia",
+        "country/canada/" to "Canada",
         "country/china/" to "China",
-        "country/thailand/" to "Thailand",
         "country/india/" to "India",
+        "country/ireland/" to "Ireland",
+        "country/japan/" to "Japan",
+        "country/korea/" to "Korea",
+        "country/new-zealand/" to "New Zealand",
+        "country/philippines/" to "Philippines",
+        "country/thailand/" to "Thailand",
+        "country/usa/" to "USA",
+        "country/united-kingdom/" to "United Kingdom",
 
+        "year/2026/" to "2026",
         "year/2025/" to "2025",
         "year/2024/" to "2024",
         "year/2023/" to "2023",
-        "year/2022/" to "2022"
+        "year/2022/" to "2022",
+        "year/2021/" to "2021",
+        "year/2020/" to "2020",
+        "year/2019/" to "2019",
+        "year/2018/" to "2018",
+        "year/2017/" to "2017",
+        "year/2016/" to "2016",
+        "year/2015/" to "2015"
     )
 
     override suspend fun getMainPage(
@@ -102,13 +139,44 @@ class Gerakin21 : MainAPI() {
             referer = "$mainUrl/"
         ).document
 
+        if (request.data.isBlank() && page <= 1) {
+            val rows = parseHomeRows(document)
+            if (rows.isNotEmpty()) return newHomePageResponse(rows)
+        }
+
         val items = parseCards(document)
             .distinctBy { it.url }
 
         return newHomePageResponse(
-            HomePageList(request.name, items, isHorizontalImages = true),
+            HomePageList(request.name, items, isHorizontalImages = false),
             hasNext = hasNextPage(document, page)
         )
+    }
+
+
+    private fun parseHomeRows(document: Document): List<HomePageList> {
+        val rows = mutableListOf<HomePageList>()
+
+        document.select(
+            "section:has(a[href]), div:has(> h2):has(a[href]), div:has(> h3):has(a[href]), " +
+                ".home-section:has(a[href]), .block:has(a[href]), .module:has(a[href]), .content:has(a[href])"
+        ).forEach { section ->
+            val rowTitle = section.selectFirst("h2, h3, .section-title, .widget-title, .heading")
+                ?.text()
+                ?.cleanTitle()
+                ?.takeIf { it.isNotBlank() && !it.isUiText() }
+                ?: return@forEach
+
+            val items = parseCards(Jsoup.parse(section.html(), mainUrl))
+                .distinctBy { it.url }
+                .take(24)
+
+            if (items.size >= 3) {
+                rows.add(HomePageList(rowTitle, items, isHorizontalImages = false))
+            }
+        }
+
+        return rows.distinctBy { it.name }.take(8)
     }
 
     private fun buildPageUrl(path: String, page: Int): String {
@@ -140,6 +208,8 @@ class Gerakin21 : MainAPI() {
                 ".movies-list article:has(a[href]), " +
                 ".items article:has(a[href]), " +
                 ".listing article:has(a[href]), " +
+                ".ml-item:has(a[href]), .item:has(a[href]), .result-item:has(a[href]), " +
+                "div[class*=poster]:has(a[href]), div[class*=thumb]:has(a[href]), " +
                 "div[class*=movie]:has(a[href]), " +
                 "div[class*=film]:has(a[href]), " +
                 "div[class*=item]:has(a[href])"
@@ -164,16 +234,21 @@ class Gerakin21 : MainAPI() {
             this
         } else {
             selectFirst(
-                "a[href][title], " +
+                "h1 a[href], " +
                     "h2 a[href], " +
                     "h3 a[href], " +
+                    "h4 a[href], " +
                     ".title a[href], " +
                     ".entry-title a[href], " +
                     ".movie-title a[href], " +
                     ".film-title a[href], " +
+                    "a[href*='/movie/'], " +
+                    "a[href*='/tv/'], " +
+                    "a[href*='/episode/'], " +
                     ".poster a[href], " +
                     ".thumb a[href], " +
                     "a[href]:has(img), " +
+                    "a[href][title], " +
                     "a[href]"
             ) ?: return null
         }
@@ -805,7 +880,7 @@ class Gerakin21 : MainAPI() {
             "home", "next", "previous", "prev", "movies", "movie", "tv series",
             "trending", "search", "genre", "country", "year", "tag", "category",
             "watch", "watch now", "tonton", "download", "trailer", "play", "login",
-            "register", "read more", "more"
+            "register", "read more", "more", "lihat semua", "nonton", "nonton movie", "nonton film"
         )
     }
 
