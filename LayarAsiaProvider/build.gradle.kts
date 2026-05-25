@@ -1,7 +1,7 @@
-version = 1
+version = 2
 
 cloudstream {
-    description = "LayarAsia — Streaming Drama Korean, Movie and TV Series"
+    description = "Kawanfilm"
     language = "id"
     authors = listOf("BetbetMiro")
 
@@ -19,5 +19,5 @@ cloudstream {
         "Movie",
     )
 
-    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://layarasia.site&size=%size%"
+    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://tv2.kawanfilm21.co&size=%size%"
 }

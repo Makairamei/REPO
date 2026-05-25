@@ -1,6 +1,7 @@
 package com.layarasia
 
-import com.lagradost.cloudstream3.* import com.lagradost.cloudstream3.LoadResponse.Companion.addActors  
+import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore  
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer  
 import com.lagradost.cloudstream3.utils.*
@@ -37,6 +38,10 @@ class LayarasiaProvider : MainAPI() {
         "series/?genre%5B%5D=drama-korea&order=update" to "Drama Korea",
         "series/?country%5B%5D=china&order=update" to "Drama China",
         "series/?genre%5B%5D=varshow&order=update" to "Variety Show",
+
+        // Source-backed homepage rows from the current LayarAsia sections.
+        "series/?genre%5B%5D=series-barat&order=update" to "Series Barat",
+        "series/?genre%5B%5D=drama-thailand&order=update" to "Series Thailand",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
