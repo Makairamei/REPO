@@ -1,21 +1,12 @@
 version = 13
 
 cloudstream {
-    authors = listOf("sad25kag")
+    description = "LayarBokep"
     language = "id"
-    description = "LayarBokep NSFW provider with hardened catalog parsing and playback resolver"
+    authors = listOf("sad25kag")
 
-    /**
-     * Status int as the following:
-     * 0: Down
-     * 1: Ok
-     * 2: Slow
-     * 3: Beta only
-     */
     status = 1
-
     tvTypes = listOf("NSFW")
 
-    isCrossPlatform = false
-    iconUrl = "https://layarbokep-mobile.ubuntumysec.workers.dev/favicon.ico"
+    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://layarbokep-mobile.ubuntumysec.workers.dev&size=%size%"
 }

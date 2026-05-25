@@ -10,12 +10,14 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
+import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
@@ -54,9 +56,7 @@ class LayarBokep : MainAPI() {
         "category/viral" to "Viral",
         "category/indo" to "Indo",
         "category/bokep-indo" to "Bokep Indo",
-        "category/uncensored" to "Uncensored",
-        "tag/hd" to "HD",
-        "tag/full-video" to "Full Video"
+        "category/uncensored" to "Uncensored"
     )
 
     private val headers = mapOf(
@@ -69,72 +69,193 @@ class LayarBokep : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val documents = request.data.buildCandidateUrls(page)
-            .mapNotNull { url ->
-                runCatching {
-                    app.get(
-                        url,
-                        headers = headers,
-                        referer = mainUrl,
-                        timeout = 25L
-                    ).document
-                }.getOrNull()
+        val pageUrls = buildPageCandidates(request.data, page)
+        var bestDocument: Document? = null
+        var bestResults: List<SearchResponse> = emptyList()
+
+        for (url in pageUrls) {
+            val response = runCatching {
+                app.get(url, headers = headers, timeout = 25L)
+            }.getOrNull() ?: continue
+
+            val text = response.text.cleanEscaped()
+            val parsed = parseCards(response.document)
+                .ifEmpty { parseCards(Jsoup.parse(text)) }
+                .ifEmpty { extractCardsFromRawText(text) }
+                .distinctBy { it.url }
+
+            if (parsed.isNotEmpty()) {
+                bestDocument = response.document
+                bestResults = parsed
+                break
             }
 
-        val items = documents
-            .flatMap { document ->
-                parseCards(document)
-            }
-            .filterNot { it.name.isBadTitle() }
-            .distinctBy { it.url }
-
-        val hasNext = documents.any { document ->
-            hasNextPage(document, page)
-        } || items.isNotEmpty()
+            if (bestDocument == null) bestDocument = response.document
+        }
 
         return newHomePageResponse(
             request.name,
-            items,
-            hasNext = hasNext
+            bestResults,
+            hasNext = bestDocument?.let { hasNextPage(it, page) } ?: false
         )
     }
 
-    private fun String.buildCandidateUrls(page: Int): List<String> {
-        val clean = trim().trim('/')
-        val candidates = linkedSetOf<String>()
+    private fun buildPageCandidates(path: String, page: Int): List<String> {
+        val cleanPath = path.trim('/')
+        val currentPage = page.coerceAtLeast(1)
 
-        fun addPath(path: String) {
-            val p = path.trim('/')
-            if (page <= 1) {
-                candidates.add(if (p.isBlank()) mainUrl else "$mainUrl/$p")
-                candidates.add(if (p.isBlank()) "$mainUrl/" else "$mainUrl/$p/")
-            } else {
-                candidates.add(if (p.isBlank()) "$mainUrl/page/$page" else "$mainUrl/$p/page/$page")
-                candidates.add(if (p.isBlank()) "$mainUrl/page/$page/" else "$mainUrl/$p/page/$page/")
-                candidates.add(if (p.isBlank()) "$mainUrl/?paged=$page" else "$mainUrl/$p/?paged=$page")
+        val base = when {
+            cleanPath.isBlank() -> mainUrl
+            cleanPath.startsWith("http", true) -> cleanPath
+            else -> "$mainUrl/$cleanPath"
+        }.trimEnd('/')
+
+        return if (currentPage <= 1) {
+            listOf(base)
+        } else {
+            listOf(
+                "$base/page/$currentPage",
+                "$base/page/$currentPage/",
+                "$base?paged=$currentPage",
+                "$base?page=$currentPage"
+            )
+        }.distinct()
+    }
+
+    private fun parseCards(document: Document): List<SearchResponse> {
+        val results = linkedMapOf<String, SearchResponse>()
+
+        document.select(
+            "article:has(a[href]):has(img), " +
+                "div.video-item:has(a[href]), " +
+                ".video-item:has(a[href]), " +
+                ".video-card:has(a[href]), " +
+                ".post:has(a[href]):has(img), " +
+                ".item:has(a[href]):has(img), " +
+                ".card:has(a[href]):has(img), " +
+                ".grid article:has(a[href]), " +
+                ".content article:has(a[href])"
+        ).forEach { element ->
+            element.toSearchResult()?.let { results[it.url] = it }
+        }
+
+        if (results.isEmpty()) {
+            document.select(
+                "h2 a[href], " +
+                    "h3 a[href], " +
+                    ".title a[href], " +
+                    ".entry-title a[href], " +
+                    "a[href]:has(img)"
+            ).forEach { element ->
+                element.toSearchResult()?.let { results[it.url] = it }
             }
         }
 
-        when {
-            clean.isBlank() -> addPath("")
-            clean.startsWith("http", true) -> candidates.add(clean)
-            clean.startsWith("?") -> {
-                if (page <= 1) candidates.add("$mainUrl/$clean")
-                else candidates.add("$mainUrl/page/$page/$clean")
-            }
-            else -> {
-                addPath(clean)
+        return results.values.toList()
+    }
 
-                val slug = clean.substringAfterLast("/")
-                if (slug.isNotBlank()) {
-                    addPath("category/$slug")
-                    addPath("kategori/$slug")
-                    addPath("tag/$slug")
-                }
+    private fun extractCardsFromRawText(text: String): List<SearchResponse> {
+        val clean = text.cleanEscaped()
+        val results = linkedMapOf<String, SearchResponse>()
+
+        Regex(
+            """"(?:url|href|link)"\s*:\s*"([^"]+)""",
+            RegexOption.IGNORE_CASE
+        ).findAll(clean).forEach { match ->
+            val href = normalizeUrl(match.groupValues[1], mainUrl)
+            if (!isContentUrl(href) || isBlockedUrl(href)) return@forEach
+
+            val nearby = clean.substring(
+                (match.range.first - 600).coerceAtLeast(0),
+                (match.range.last + 900).coerceAtMost(clean.length)
+            )
+
+            val title = listOfNotNull(
+                Regex(""""(?:title|name|alt)"\s*:\s*"([^"]+)""", RegexOption.IGNORE_CASE)
+                    .find(nearby)?.groupValues?.getOrNull(1),
+                href.substringAfterLast("/").replace("-", " ")
+            ).firstOrNull { it.isNotBlank() && !isBadTitle(it) }
+                ?.cleanTitle()
+                ?: return@forEach
+
+            val poster = Regex(""""(?:image|poster|thumbnail|thumb|src)"\s*:\s*"([^"]+)""", RegexOption.IGNORE_CASE)
+                .find(nearby)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.let { normalizeUrl(it, mainUrl) }
+                ?.takeIf { !isBadImage(it) }
+
+            results[href] = newMovieSearchResponse(title, href, TvType.NSFW) {
+                posterUrl = poster
             }
         }
 
-        return candidates.toList()
+        return results.values.toList()
+    }
+
+    private fun Element.toSearchResult(): SearchResponse? {
+        val anchor = if (this.`is`("a[href]")) {
+            this
+        } else {
+            selectFirst(
+                "h2 a[href], " +
+                    "h3 a[href], " +
+                    ".title a[href], " +
+                    ".entry-title a[href], " +
+                    "a[href]:has(img), " +
+                    "a[href]"
+            ) ?: return null
+        }
+
+        val href = fixUrlNull(anchor.attr("href")) ?: return null
+        if (!href.startsWith(mainUrl)) return null
+        if (!isContentUrl(href) || isBlockedUrl(href)) return null
+
+        val image = selectFirst("img") ?: anchor.selectFirst("img")
+        val title = listOf(
+            selectFirst("h2")?.text()?.trim(),
+            selectFirst("h3")?.text()?.trim(),
+            selectFirst(".title")?.text()?.trim(),
+            selectFirst(".entry-title")?.text()?.trim(),
+            anchor.attr("aria-label").trim(),
+            anchor.attr("title").trim(),
+            image?.attr("alt")?.trim(),
+            anchor.text().trim(),
+            href.substringAfterLast("/").replace("-", " ")
+        ).firstOrNull {
+            !it.isNullOrBlank() && !isBadTitle(it)
+        }?.cleanTitle() ?: return null
+
+        if (title.length < 3) return null
+
+        val poster = fixUrlNull(image?.getImageAttr())?.takeIf { !isBadImage(it) }
+
+        return newMovieSearchResponse(title, href, TvType.NSFW) {
+            posterUrl = poster
+        }
+    }
+
+    private fun isContentUrl(url: String): Boolean {
+        val path = url.substringAfter(mainUrl).trim('/').lowercase()
+        return path.isNotBlank() &&
+            !path.startsWith("category/") &&
+            !path.startsWith("tag/") &&
+            !path.startsWith("page/") &&
+            !path.startsWith("search") &&
+            !path.startsWith("privacy") &&
+            !path.startsWith("dmca") &&
+            !path.startsWith("contact") &&
+            !path.startsWith("terms") &&
+            !path.startsWith("wp-") &&
+            !path.startsWith("api/")
+    }
+
+    private fun isBlockedUrl(url: String): Boolean {
+        val path = url.substringAfter(mainUrl).trim('/').lowercase()
+        return path.isBlank() || listOf(
+            "category/", "tag/", "page/", "search", "privacy", "dmca", "contact",
+            "terms", "feed", "wp-content", "wp-json", "wp-admin"
+        ).any { path == it.trimEnd('/') || path.startsWith(it) }
     }
 
     private fun hasNextPage(document: Document, page: Int): Boolean {
@@ -149,166 +270,32 @@ class LayarBokep : MainAPI() {
         ) != null
     }
 
-    private fun parseCards(document: Document): List<SearchResponse> {
-        val results = linkedMapOf<String, SearchResponse>()
-
-        document.select(
-            "article:has(a[href]), " +
-                ".video-item:has(a[href]), " +
-                ".video-card:has(a[href]), " +
-                ".post:has(a[href]), " +
-                ".item:has(a[href]), " +
-                ".grid article:has(a[href]), " +
-                ".content article:has(a[href]), " +
-                ".card:has(a[href]), " +
-                ".entry:has(a[href])"
-        ).forEach { element ->
-            element.toSearchResult()?.let { item ->
-                results[item.url] = item
-            }
-        }
-
-        if (results.isEmpty()) {
-            document.select("a[href]:has(img)").forEach { element ->
-                element.toSearchResult()?.let { item ->
-                    results[item.url] = item
-                }
-            }
-        }
-
-        return results.values.toList()
-    }
-
-    private fun Element.toSearchResult(): SearchResponse? {
-        val anchor = if (this.`is`("a[href]")) {
-            this
-        } else {
-            selectFirst(
-                ".title a[href], " +
-                    ".entry-title a[href], " +
-                    "h2 a[href], " +
-                    "h3 a[href], " +
-                    "a[href]:has(img), " +
-                    "a[href]"
-            ) ?: return null
-        }
-
-        val href = fixUrlNull(anchor.attr("href")) ?: return null
-
-        if (!href.startsWith(mainUrl)) return null
-        if (href.isBlockedNavigationUrl()) return null
-
-        val image = selectFirst("img") ?: anchor.selectFirst("img")
-        val title = listOf(
-            selectFirst(".title")?.text(),
-            selectFirst(".entry-title")?.text(),
-            selectFirst("h2")?.text(),
-            selectFirst("h3")?.text(),
-            anchor.attr("aria-label"),
-            anchor.attr("title"),
-            image?.attr("alt"),
-            anchor.text(),
-            href.substringAfterLast("/").replace("-", " ")
-        ).firstOrNull {
-            !it.isNullOrBlank() && !it.isBadTitle()
-        }?.cleanTitle() ?: return null
-
-        if (title.length < 3 || title.isBadTitle()) return null
-
-        val poster = fixUrlNull(image?.getImageAttr())
-            ?.takeIf { !it.isBadImage() }
-
-        return newMovieSearchResponse(
-            title,
-            href,
-            TvType.NSFW
-        ) {
-            posterUrl = poster
-        }
-    }
-
-    private fun String.isBlockedNavigationUrl(): Boolean {
-        val path = substringAfter(mainUrl).trim('/').lowercase()
-
-        if (path.isBlank()) return true
-
-        val blockedPrefixes = listOf(
-            "category/",
-            "kategori/",
-            "tag/",
-            "page/",
-            "search",
-            "privacy",
-            "dmca",
-            "contact",
-            "terms",
-            "login",
-            "register",
-            "wp-content/",
-            "wp-json/",
-            "wp-admin/",
-            "feed"
-        )
-
-        val definitelyPlayable = listOf(
-            "video/",
-            "watch/",
-            "post/",
-            "movie/"
-        ).any { path.startsWith(it) }
-
-        if (definitelyPlayable) return false
-
-        return blockedPrefixes.any {
-            path == it.trimEnd('/') || path.startsWith(it)
-        }
-    }
-
-    override suspend fun search(
-        query: String,
-        page: Int
-    ): SearchResponseList {
+    override suspend fun search(query: String, page: Int): SearchResponseList {
         val keyword = query.trim()
+        if (keyword.isBlank()) return newSearchResponseList(emptyList(), hasNext = false)
 
-        if (keyword.isBlank()) {
-            return newSearchResponseList(emptyList(), hasNext = false)
-        }
-
-        val encoded = URLEncoder.encode(keyword, "UTF-8")
-        val urls = listOf(
-            if (page <= 1) "$mainUrl/?s=$encoded" else "$mainUrl/page/$page/?s=$encoded",
-            if (page <= 1) "$mainUrl/search/$encoded" else "$mainUrl/search/$encoded/page/$page",
-            if (page <= 1) "$mainUrl/?search=$encoded" else "$mainUrl/page/$page/?search=$encoded"
+        val q = URLEncoder.encode(keyword, "UTF-8")
+        val searchUrls = listOf(
+            if (page <= 1) "$mainUrl/?s=$q" else "$mainUrl/page/${page.coerceAtLeast(1)}/?s=$q",
+            if (page <= 1) "$mainUrl/search?q=$q" else "$mainUrl/search?page=$page&q=$q",
+            if (page <= 1) "$mainUrl/cari?kata-kunci=$q" else "$mainUrl/cari?kata-kunci=$q&page=$page"
         )
 
-        var bestResults = emptyList<SearchResponse>()
-        var next = false
-
-        for (url in urls) {
-            val document = runCatching {
-                app.get(
-                    url,
-                    headers = headers,
-                    referer = mainUrl,
-                    timeout = 25L
-                ).document
+        for (url in searchUrls) {
+            val response = runCatching {
+                app.get(url, headers = headers, timeout = 25L)
             }.getOrNull() ?: continue
 
-            val parsed = parseCards(document)
-                .filterNot { it.name.isBadTitle() }
+            val results = parseCards(response.document)
+                .ifEmpty { extractCardsFromRawText(response.text.cleanEscaped()) }
                 .distinctBy { it.url }
 
-            if (parsed.isNotEmpty()) {
-                bestResults = parsed
-                next = hasNextPage(document, page)
-                break
+            if (results.isNotEmpty()) {
+                return newSearchResponseList(results, hasNext = hasNextPage(response.document, page))
             }
         }
 
-        return newSearchResponseList(
-            bestResults,
-            hasNext = next
-        )
+        return newSearchResponseList(emptyList(), hasNext = false)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -320,25 +307,16 @@ class LayarBokep : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val response = app.get(
-            url,
-            headers = headers,
-            referer = mainUrl,
-            timeout = 25L
-        )
-
+        val response = app.get(url, headers = headers, timeout = 25L)
         val document = response.document
 
         val title = listOf(
             document.selectFirst("meta[property=og:title]")?.attr("content"),
             document.selectFirst("meta[itemprop=name]")?.attr("content"),
-            document.selectFirst("h1.entry-title")?.text(),
-            document.selectFirst("h1")?.text(),
-            document.selectFirst(".video-title")?.text(),
-            document.selectFirst(".entry-title")?.text(),
+            document.selectFirst("h1, h1.entry-title, .entry-title, .video-title")?.text(),
             url.substringAfterLast("/").replace("-", " ")
         ).firstOrNull {
-            !it.isNullOrBlank() && !it.isBadTitle()
+            !it.isNullOrBlank() && !isBadTitle(it)
         }?.cleanTitle() ?: return null
 
         val poster = getPoster(document)
@@ -346,43 +324,21 @@ class LayarBokep : MainAPI() {
         val plot = listOf(
             document.selectFirst("meta[property=og:description]")?.attr("content"),
             document.selectFirst("meta[name=description]")?.attr("content"),
-            document.selectFirst(".entry-content p")?.text(),
-            document.selectFirst(".entry-content")?.text(),
-            document.selectFirst(".description")?.text(),
-            document.selectFirst(".video-description")?.text()
-        ).firstOrNull {
-            !it.isNullOrBlank() && !it.isBadTitle()
-        }?.trim()
+            document.selectFirst(".entry-content p, .entry-content, .description, .video-description")?.text()
+        ).firstOrNull { !it.isNullOrBlank() }
+            ?.trim()
 
         val tags = document.select(
-            "a[href*='/category/'], " +
-                "a[href*='/kategori/'], " +
-                "a[href*='/tag/'], " +
-                ".tags a, " +
-                ".category a"
-        ).map { it.text().trim().cleanTitle() }
-            .filter { it.isNotBlank() && !it.isBadTitle() }
+            "a[href*='/category/'], a[href*='/tag/'], .tags a, .category a"
+        ).map { it.text().trim() }
+            .filter { it.isNotBlank() && !isBadTitle(it) }
             .distinct()
 
-        val recommendations = document.select(
-            ".related article:has(a[href]), " +
-                ".related-posts article:has(a[href]), " +
-                ".related a[href]:has(img), " +
-                "article:has(a[href]), " +
-                ".post:has(a[href]), " +
-                ".item:has(a[href])"
-        ).mapNotNull { element ->
-            element.toSearchResult()
-        }.filter { it.url != url }
+        val recommendations = parseCards(document)
+            .filter { it.url != url }
             .distinctBy { it.url }
-            .take(24)
 
-        return newMovieLoadResponse(
-            title,
-            url,
-            TvType.NSFW,
-            url
-        ) {
+        return newMovieLoadResponse(title, url, TvType.NSFW, url) {
             posterUrl = poster
             this.plot = plot
             this.tags = tags
@@ -397,36 +353,24 @@ class LayarBokep : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val pageUrl = normalizeUrl(data, mainUrl)
-
-        val response = app.get(
-            pageUrl,
-            headers = headers,
-            referer = mainUrl,
-            timeout = 25L
-        )
-
+        val response = app.get(pageUrl, headers = headers, referer = mainUrl, timeout = 25L)
         val document = response.document
         val html = response.text.cleanEscaped()
 
         val directLinks = linkedSetOf<String>()
         val embedLinks = linkedSetOf<String>()
 
-        collectCandidatesFromDocument(
-            document = document,
-            baseUrl = pageUrl,
-            directLinks = directLinks,
-            embedLinks = embedLinks
-        )
+        collectCandidatesFromDocument(document, pageUrl, directLinks, embedLinks)
+        collectWordpressAjaxPlayers(document, pageUrl, directLinks, embedLinks)
+        collectWorkerApiCandidates(pageUrl, directLinks, embedLinks)
 
-        collectAjaxPlayers(
-            document = document,
-            pageUrl = pageUrl,
-            directLinks = directLinks,
-            embedLinks = embedLinks
-        )
+        extractPlayableUrls(html).forEach { addCandidate(it, pageUrl, directLinks, embedLinks) }
+        extractSubtitles(html, pageUrl, subtitleCallback)
 
-        extractPlayableUrls(html).forEach { raw ->
-            addCandidate(raw, pageUrl, directLinks, embedLinks)
+        decodeBase64Payloads(html).forEach { decoded ->
+            extractPlayableUrls(decoded).forEach { addCandidate(it, pageUrl, directLinks, embedLinks) }
+            collectCandidatesFromDocument(Jsoup.parse(decoded), pageUrl, directLinks, embedLinks)
+            extractSubtitles(decoded, pageUrl, subtitleCallback)
         }
 
         val unpacked = runCatching {
@@ -434,102 +378,40 @@ class LayarBokep : MainAPI() {
         }.getOrNull()
 
         if (!unpacked.isNullOrBlank()) {
-            extractPlayableUrls(unpacked.cleanEscaped()).forEach { raw ->
-                addCandidate(raw, pageUrl, directLinks, embedLinks)
-            }
-        }
-
-        val decodedOnce = runCatching {
-            URLDecoder.decode(html, "UTF-8")
-        }.getOrDefault(html)
-
-        if (decodedOnce != html) {
-            extractPlayableUrls(decodedOnce.cleanEscaped()).forEach { raw ->
-                addCandidate(raw, pageUrl, directLinks, embedLinks)
-            }
-        }
-
-        decodeBase64Fragments(html).forEach { decoded ->
-            collectCandidatesFromDocument(
-                document = Jsoup.parse(decoded),
-                baseUrl = pageUrl,
-                directLinks = directLinks,
-                embedLinks = embedLinks
-            )
-            extractPlayableUrls(decoded).forEach { raw ->
-                addCandidate(raw, pageUrl, directLinks, embedLinks)
-            }
-        }
-
-        extractSubtitleUrls(html, pageUrl).forEach { subtitle ->
-            subtitleCallback(subtitle)
+            val cleanUnpacked = unpacked.cleanEscaped()
+            extractPlayableUrls(cleanUnpacked).forEach { addCandidate(it, pageUrl, directLinks, embedLinks) }
+            collectCandidatesFromDocument(Jsoup.parse(cleanUnpacked), pageUrl, directLinks, embedLinks)
+            extractSubtitles(cleanUnpacked, pageUrl, subtitleCallback)
         }
 
         var found = false
 
         directLinks
-            .filterNot { it.isJunkLink() }
+            .filterNot { isBadPlayableUrl(it) }
             .distinct()
-            .sortedWith(
-                compareBy<String> { if (it.isHlsLike()) 0 else 1 }
-                    .thenBy { it.length }
-            )
+            .sortedWith(compareBy<String> { if (isHlsLike(it)) 0 else 1 }.thenBy { qualitySortRank(it) })
             .forEach { link ->
-                emitDirectLink(
-                    link = link,
-                    referer = pageUrl,
-                    callback = callback
-                )
+                emitDirectLink(link, pageUrl, callback)
                 found = true
             }
 
         if (found) return true
 
-        val prioritizedEmbeds = embedLinks
-            .filterNot { it.isJunkLink() }
-            .filterNot { it == pageUrl }
-            .distinct()
-            .sortedWith(
-                compareBy<String> { hostPriority(it) }
-                    .thenBy { it.length }
-            )
+        for (embed in prioritizeEmbeds(embedLinks).take(12)) {
+            val extractorSuccess = loadExtractor(embed, pageUrl, subtitleCallback, callback)
+            if (extractorSuccess) return true
 
-        for (embed in prioritizedEmbeds.take(12)) {
-            val success = loadExtractor(
-                embed,
-                pageUrl,
-                subtitleCallback,
-                callback
-            )
-
-            if (success) return true
-
-            val nestedLinks = resolveNestedLinks(embed, pageUrl)
-
+            val nestedLinks = resolveNestedLinks(embed, pageUrl, subtitleCallback)
             for (nested in nestedLinks) {
                 val fixed = normalizeUrl(nested, embed).replace(".txt", ".m3u8")
-
                 when {
-                    fixed.isJunkLink() -> Unit
-
-                    fixed.isDirectVideoUrl() -> {
-                        emitDirectLink(
-                            link = fixed,
-                            referer = embed,
-                            callback = callback
-                        )
+                    isBadPlayableUrl(fixed) -> Unit
+                    isHlsLike(fixed) || fixed.contains(".mp4", true) || fixed.contains(".webm", true) -> {
+                        emitDirectLink(fixed, embed, callback)
                         return true
                     }
-
                     fixed.startsWith("http", true) -> {
-                        val nestedSuccess = loadExtractor(
-                            fixed,
-                            embed,
-                            subtitleCallback,
-                            callback
-                        )
-
-                        if (nestedSuccess) return true
+                        if (loadExtractor(fixed, embed, subtitleCallback, callback)) return true
                     }
                 }
             }
@@ -538,127 +420,131 @@ class LayarBokep : MainAPI() {
         return false
     }
 
-    private suspend fun collectAjaxPlayers(
+    private suspend fun collectWordpressAjaxPlayers(
         document: Document,
         pageUrl: String,
         directLinks: MutableSet<String>,
         embedLinks: MutableSet<String>
     ) {
-        val options = document.select(
-            ".dooplay_player_option[data-post][data-nume][data-type], " +
+        val players = document.select(
+            "#playeroptionsul li[data-post][data-nume][data-type], " +
+                ".dooplay_player_option[data-post][data-nume][data-type], " +
                 ".player-option[data-post][data-nume][data-type], " +
-                "li[data-post][data-nume][data-type], " +
-                "div[data-post][data-nume][data-type], " +
-                "[data-player][data-id], " +
-                "[data-embed][data-id]"
+                "li[data-post][data-nume][data-type]"
         )
 
-        val ajaxUrls = linkedSetOf(
-            "$mainUrl/wp-admin/admin-ajax.php",
-            "$mainUrl/admin-ajax.php",
-            "$mainUrl/ajax.php",
-            "$mainUrl/api/player",
-            "$mainUrl/player"
-        )
+        if (players.isEmpty()) return
 
-        options.forEach { option ->
-            val post = option.attr("data-post").trim()
-                .ifBlank { option.attr("data-id").trim() }
-            val nume = option.attr("data-nume").trim()
-                .ifBlank { option.attr("data-player").trim() }
-            val type = option.attr("data-type").trim()
-                .ifBlank { option.attr("data-embed").trim() }
+        players.forEach { player ->
+            val post = player.attr("data-post").trim()
+            val nume = player.attr("data-nume").trim()
+            val type = player.attr("data-type").trim()
+            val label = player.text().lowercase()
 
-            if (post.isBlank()) return@forEach
+            if (post.isBlank() || nume.isBlank() || type.isBlank()) return@forEach
+            if (label.contains("trailer") || nume.contains("trailer", true)) return@forEach
 
-            val payloads = listOf(
-                mapOf("action" to "doo_player_ajax", "post" to post, "nume" to nume, "type" to type),
-                mapOf("action" to "player_ajax", "id" to post, "server" to nume, "type" to type),
-                mapOf("id" to post, "server" to nume, "type" to type)
-            )
+            val ajaxText = runCatching {
+                app.post(
+                    url = "$mainUrl/wp-admin/admin-ajax.php",
+                    data = mapOf(
+                        "action" to "doo_player_ajax",
+                        "post" to post,
+                        "nume" to nume,
+                        "type" to type
+                    ),
+                    headers = headers + mapOf(
+                        "X-Requested-With" to "XMLHttpRequest",
+                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                        "Accept" to "application/json,text/html,text/plain,*/*",
+                        "Origin" to mainUrl
+                    ),
+                    referer = pageUrl,
+                    timeout = 20L
+                ).text.cleanEscaped()
+            }.getOrNull().orEmpty()
 
-            ajaxUrls.forEach { ajaxUrl ->
-                payloads.forEach { payload ->
-                    val text = runCatching {
-                        app.post(
-                            ajaxUrl,
-                            data = payload.filterValues { it.isNotBlank() },
-                            headers = headers + mapOf(
-                                "X-Requested-With" to "XMLHttpRequest",
-                                "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                                "Origin" to mainUrl,
-                                "Accept" to "application/json,text/html,text/plain,*/*"
-                            ),
-                            referer = pageUrl,
-                            timeout = 12L
-                        ).text.cleanEscaped()
-                    }.getOrNull().orEmpty()
+            if (ajaxText.isBlank()) return@forEach
 
-                    if (text.isBlank()) return@forEach
-
-                    parsePlayerPayload(
-                        text = text,
-                        baseUrl = pageUrl,
-                        directLinks = directLinks,
-                        embedLinks = embedLinks
-                    )
-                }
-            }
-        }
-
-        document.select(
-            "[data-src], [data-file], [data-video], [data-url], [data-embed], [data-iframe], [data-play], [data-token]"
-        ).forEach { element ->
-            val raw = element.attr("data-file")
-                .ifBlank { element.attr("data-video") }
-                .ifBlank { element.attr("data-url") }
-                .ifBlank { element.attr("data-embed") }
-                .ifBlank { element.attr("data-iframe") }
-                .ifBlank { element.attr("data-play") }
-                .ifBlank { element.attr("data-src") }
-                .ifBlank { element.attr("data-token") }
-                .trim()
-
-            addCandidate(raw, pageUrl, directLinks, embedLinks)
+            parsePlayerResponse(ajaxText, pageUrl, directLinks, embedLinks)
         }
     }
 
-    private fun parsePlayerPayload(
+    private suspend fun collectWorkerApiCandidates(
+        pageUrl: String,
+        directLinks: MutableSet<String>,
+        embedLinks: MutableSet<String>
+    ) {
+        val slug = pageUrl.trimEnd('/').substringAfterLast("/")
+        if (slug.isBlank()) return
+
+        val apiUrls = listOf(
+            "$mainUrl/api/video/$slug",
+            "$mainUrl/api/videos/$slug",
+            "$mainUrl/site/video/$slug",
+            "$mainUrl/video/$slug/source",
+            "$mainUrl/video/$slug/stream",
+            "$mainUrl/video/$slug/play"
+        )
+
+        apiUrls.forEach { apiUrl ->
+            val text = runCatching {
+                app.get(
+                    apiUrl,
+                    headers = headers + mapOf(
+                        "Accept" to "application/json,text/html,text/plain,*/*",
+                        "X-Requested-With" to "XMLHttpRequest"
+                    ),
+                    referer = pageUrl,
+                    timeout = 12L
+                ).text.cleanEscaped()
+            }.getOrNull().orEmpty()
+
+            if (text.isNotBlank() && !text.startsWith("<!DOCTYPE", true)) {
+                parsePlayerResponse(text, apiUrl, directLinks, embedLinks)
+            }
+        }
+    }
+
+    private fun parsePlayerResponse(
         text: String,
         baseUrl: String,
         directLinks: MutableSet<String>,
         embedLinks: MutableSet<String>
     ) {
-        extractPlayableUrls(text).forEach { raw ->
-            addCandidate(raw, baseUrl, directLinks, embedLinks)
+        extractPlayableUrls(text).forEach { addCandidate(it, baseUrl, directLinks, embedLinks) }
+
+        Regex(
+            """"(?:embed_url|embedUrl|iframe|player|url|source|file|src)"\s*:\s*"((?:\\.|[^"])*)""",
+            RegexOption.IGNORE_CASE
+        ).findAll(text).forEach { match ->
+            val raw = match.groupValues[1]
+                .replace("\\/", "/")
+                .replace("\\\"", "\"")
+                .cleanEscaped()
+
+            if (raw.isNotBlank()) addCandidate(decodeIframe(raw), baseUrl, directLinks, embedLinks)
         }
 
-        val decoded = runCatching {
-            URLDecoder.decode(text, "UTF-8")
-        }.getOrDefault(text)
-
+        val decoded = runCatching { URLDecoder.decode(text, "UTF-8") }.getOrDefault(text)
         if (decoded != text) {
-            extractPlayableUrls(decoded).forEach { raw ->
-                addCandidate(raw, baseUrl, directLinks, embedLinks)
-            }
+            extractPlayableUrls(decoded).forEach { addCandidate(it, baseUrl, directLinks, embedLinks) }
+            collectCandidatesFromDocument(Jsoup.parse(decoded), baseUrl, directLinks, embedLinks)
         }
 
-        Jsoup.parse(text).select(
-            "iframe[src], iframe[data-src], video[src], source[src], embed[src], object[data], a[href], " +
-                "[data-src], [data-video], [data-file], [data-url], [data-embed], [data-iframe]"
-        ).forEach { element ->
-            val raw = element.attr("data-video")
-                .ifBlank { element.attr("data-file") }
-                .ifBlank { element.attr("data-url") }
-                .ifBlank { element.attr("data-embed") }
-                .ifBlank { element.attr("data-iframe") }
-                .ifBlank { element.attr("data-src") }
-                .ifBlank { element.attr("data") }
-                .ifBlank { element.attr("src") }
-                .ifBlank { element.attr("href") }
-                .trim()
+        collectCandidatesFromDocument(Jsoup.parse(text), baseUrl, directLinks, embedLinks)
+        decodeBase64Payloads(text).forEach { decodedText ->
+            extractPlayableUrls(decodedText).forEach { addCandidate(it, baseUrl, directLinks, embedLinks) }
+            collectCandidatesFromDocument(Jsoup.parse(decodedText), baseUrl, directLinks, embedLinks)
+        }
+    }
 
-            addCandidate(raw, baseUrl, directLinks, embedLinks)
+    private fun decodeIframe(value: String): String {
+        val clean = value.cleanEscaped()
+        return when {
+            clean.contains("<iframe", true) -> clean
+            clean.startsWith("http", true) -> clean
+            else -> runCatching { URLDecoder.decode(clean, "UTF-8") }.getOrDefault(clean)
         }
     }
 
@@ -674,53 +560,78 @@ class LayarBokep : MainAPI() {
                 "meta[property=og:video:url], " +
                 "meta[property=og:video:secure_url], " +
                 "meta[name=twitter:player], " +
-                "video[src], video[data-src], video[data-video], video[data-file], video[poster], " +
-                "video source[src], source[src], source[data-src], " +
                 "iframe[src], iframe[data-src], iframe[data-litespeed-src], iframe[data-lazy-src], " +
-                "embed[src], object[data], a[href], " +
-                "[data-src], [data-video], [data-file], [data-url], [data-embed], [data-iframe]"
+                "embed[src], object[data], video[src], video[poster], video source[src], source[src], " +
+                "a[href], [data-src], [data-video], [data-file], [data-url], [data-embed], [data-iframe]"
         ).forEach { element ->
             val raw = element.attr("content")
+                .ifBlank { element.attr("data-litespeed-src") }
+                .ifBlank { element.attr("data-lazy-src") }
                 .ifBlank { element.attr("data-video") }
                 .ifBlank { element.attr("data-file") }
                 .ifBlank { element.attr("data-url") }
                 .ifBlank { element.attr("data-embed") }
                 .ifBlank { element.attr("data-iframe") }
-                .ifBlank { element.attr("data-litespeed-src") }
-                .ifBlank { element.attr("data-lazy-src") }
                 .ifBlank { element.attr("data-src") }
                 .ifBlank { element.attr("data") }
                 .ifBlank { element.attr("src") }
                 .ifBlank { element.attr("href") }
                 .trim()
 
+            if (raw.isBlank()) return@forEach
             val label = element.text().lowercase()
 
-            if (
-                raw.isBlank() ||
-                raw.startsWith("#") ||
-                raw.startsWith("javascript", true) ||
-                label.contains("report") ||
-                label.contains("share")
-            ) {
-                return@forEach
-            }
+            if (raw.startsWith("#") || raw.startsWith("javascript", true)) return@forEach
+            if (label.contains("trailer") || label.contains("report")) return@forEach
 
-            if (
-                element.tagName().equals("meta", true) ||
-                element.tagName().equals("video", true) ||
-                element.tagName().equals("source", true) ||
-                element.tagName().equals("iframe", true) ||
-                element.tagName().equals("embed", true) ||
-                element.tagName().equals("object", true) ||
-                raw.isDirectVideoUrl() ||
-                raw.isKnownEmbedHost() ||
-                raw.contains("embed", true) ||
-                raw.contains("player", true)
-            ) {
-                addCandidate(raw, baseUrl, directLinks, embedLinks)
-            }
+            addCandidate(raw, baseUrl, directLinks, embedLinks)
         }
+    }
+
+    private suspend fun resolveNestedLinks(
+        url: String,
+        referer: String,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ): List<String> {
+        if (isBadPlayableUrl(url)) return emptyList()
+
+        val response = runCatching {
+            app.get(
+                url,
+                headers = headers + mapOf("Accept" to "text/html,application/json,text/plain,*/*"),
+                referer = referer,
+                timeout = 15L
+            )
+        }.getOrNull() ?: return emptyList()
+
+        val text = response.text.cleanEscaped()
+        val results = linkedSetOf<String>()
+
+        collectCandidatesFromDocument(response.document, url, results, results)
+        results.addAll(extractPlayableUrls(text))
+        extractSubtitles(text, url, subtitleCallback)
+
+        val unpacked = runCatching {
+            if (!getPacked(text).isNullOrEmpty()) getAndUnpack(text) else null
+        }.getOrNull()
+
+        if (!unpacked.isNullOrBlank()) {
+            val cleanUnpacked = unpacked.cleanEscaped()
+            results.addAll(extractPlayableUrls(cleanUnpacked))
+            collectCandidatesFromDocument(Jsoup.parse(cleanUnpacked), url, results, results)
+            extractSubtitles(cleanUnpacked, url, subtitleCallback)
+        }
+
+        decodeBase64Payloads(text).forEach { decoded ->
+            results.addAll(extractPlayableUrls(decoded))
+            collectCandidatesFromDocument(Jsoup.parse(decoded), url, results, results)
+            extractSubtitles(decoded, url, subtitleCallback)
+        }
+
+        return results
+            .map { normalizeUrl(it, url).replace(".txt", ".m3u8") }
+            .filterNot { isBadPlayableUrl(it) }
+            .distinct()
     }
 
     private fun addCandidate(
@@ -735,66 +646,16 @@ class LayarBokep : MainAPI() {
             .replace(".txt", ".m3u8")
             .trim()
 
-        if (fixed.isBlank() || fixed.isJunkLink()) return
+        if (fixed.isBlank() || isBadPlayableUrl(fixed)) return
 
         when {
-            fixed.isDirectVideoUrl() -> directLinks.add(fixed)
-            fixed.startsWith("http", true) && fixed.isKnownEmbedHost() -> embedLinks.add(fixed)
+            isHlsLike(fixed) || fixed.contains(".mp4", true) || fixed.contains(".webm", true) -> directLinks.add(fixed)
+            fixed.startsWith("http", true) && isKnownHost(fixed) -> embedLinks.add(fixed)
             fixed.startsWith("http", true) && fixed.contains("embed", true) -> embedLinks.add(fixed)
             fixed.startsWith("http", true) && fixed.contains("player", true) -> embedLinks.add(fixed)
             fixed.startsWith("http", true) && fixed.contains("stream", true) -> embedLinks.add(fixed)
+            fixed.startsWith("http", true) && fixed.contains("/video/", true) -> embedLinks.add(fixed)
         }
-    }
-
-    private suspend fun resolveNestedLinks(
-        url: String,
-        referer: String
-    ): List<String> {
-        if (url.isJunkLink()) return emptyList()
-
-        val response = runCatching {
-            app.get(
-                url,
-                headers = headers + mapOf(
-                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Origin" to mainUrl
-                ),
-                referer = referer,
-                timeout = 15L
-            )
-        }.getOrNull() ?: return emptyList()
-
-        val text = response.text.cleanEscaped()
-        val results = linkedSetOf<String>()
-
-        collectCandidatesFromDocument(
-            document = response.document,
-            baseUrl = url,
-            directLinks = results,
-            embedLinks = results
-        )
-
-        extractPlayableUrls(text).forEach { results.add(normalizeUrl(it, url).replace(".txt", ".m3u8")) }
-
-        val unpacked = runCatching {
-            if (!getPacked(text).isNullOrEmpty()) getAndUnpack(text) else null
-        }.getOrNull()
-
-        if (!unpacked.isNullOrBlank()) {
-            extractPlayableUrls(unpacked.cleanEscaped()).forEach {
-                results.add(normalizeUrl(it, url).replace(".txt", ".m3u8"))
-            }
-        }
-
-        decodeBase64Fragments(text).forEach { decoded ->
-            extractPlayableUrls(decoded).forEach {
-                results.add(normalizeUrl(it, url).replace(".txt", ".m3u8"))
-            }
-        }
-
-        return results
-            .filterNot { it.isJunkLink() }
-            .distinct()
     }
 
     private suspend fun emitDirectLink(
@@ -802,52 +663,53 @@ class LayarBokep : MainAPI() {
         referer: String,
         callback: (ExtractorLink) -> Unit
     ) {
-        val fixed = link.cleanEscaped().replace(".txt", ".m3u8")
+        if (isBadPlayableUrl(link)) return
 
-        if (fixed.isBlank() || fixed.isJunkLink()) return
-
-        val linkHeaders = mapOf(
-            "User-Agent" to USER_AGENT,
-            "Referer" to referer,
-            "Origin" to originOf(referer),
-            "Accept" to "*/*"
-        )
-
-        if (fixed.contains(".m3u8", true)) {
+        if (isHlsLike(link)) {
             generateM3u8(
                 source = name,
-                streamUrl = fixed,
+                streamUrl = link,
                 referer = referer,
-                headers = linkHeaders
+                headers = mapOf(
+                    "User-Agent" to USER_AGENT,
+                    "Referer" to referer,
+                    "Origin" to mainUrl,
+                    "Accept" to "*/*"
+                )
             ).forEach(callback)
         } else {
             callback(
                 newExtractorLink(
                     source = name,
                     name = name,
-                    url = fixed,
+                    url = link,
                     type = ExtractorLinkType.VIDEO
                 ) {
                     this.referer = referer
-                    this.quality = getQualityFromName(fixed).takeIf {
+                    this.quality = getQualityFromName(link).takeIf {
                         it != Qualities.Unknown.value
-                    } ?: fixed.qualityFromUrl()
-                    this.headers = linkHeaders
+                    } ?: qualityFromUrl(link)
+                    this.headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Referer" to referer,
+                        "Origin" to mainUrl,
+                        "Accept" to "*/*"
+                    )
                 }
             )
         }
     }
 
     private fun extractPlayableUrls(text: String): List<String> {
-        val clean = text.cleanEscaped()
         val urls = linkedSetOf<String>()
+        val clean = text.cleanEscaped()
 
         Regex(
             """https?://[^"'\\\s<>]+?\.(?:m3u8|mp4|webm|txt)(?:\?[^"'\\\s<>]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .map { it.value.cleanEscaped().replace(".txt", ".m3u8") }
-            .filterNot { it.isJunkLink() }
+            .filterNot { isBadPlayableUrl(it) }
             .forEach { urls.add(it) }
 
         Regex(
@@ -855,120 +717,198 @@ class LayarBokep : MainAPI() {
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .map { "https:${it.value.cleanEscaped().replace(".txt", ".m3u8")}" }
-            .filterNot { it.isJunkLink() }
+            .filterNot { isBadPlayableUrl(it) }
             .forEach { urls.add(it) }
 
         Regex(
-            """https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.webm|\.txt|jeniusplay|majorplay|dood|streamtape|filemoon|vidhide|voe|mixdrop|streamwish|wishfast|hglink)[^"'\\\s<>]*""",
+            """https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.webm|\.txt|jeniusplay|majorplay|filemoon|streamwish|wishfast|dood|streamtape|vidhide|vidguard|voe|mixdrop|mp4upload)[^"'\\\s<>]*""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
-            .map {
-                runCatching {
-                    URLDecoder.decode(it.value, "UTF-8")
-                }.getOrDefault(it.value)
-            }
+            .map { runCatching { URLDecoder.decode(it.value, "UTF-8") }.getOrDefault(it.value) }
             .map { it.cleanEscaped().replace(".txt", ".m3u8") }
-            .filterNot { it.isJunkLink() }
+            .filterNot { isBadPlayableUrl(it) }
             .forEach { urls.add(it) }
 
         Regex(
-            """(?:file|src|source|url|videoSource|videoUrl|video_url|playUrl|play_url|hls|hlsUrl|hls_url|stream|streamUrl|stream_url|embedUrl|embed_url)\s*[:=]\s*["']([^"']+)["']""",
+            """(?:file|source|src|url|videoSource|videoUrl|video_url|hls|hlsUrl|hls_url|stream|streamUrl|embedUrl|embed_url|contentUrl)\s*[:=]\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .mapNotNull { it.groupValues.getOrNull(1) }
             .map { it.cleanEscaped().replace(".txt", ".m3u8") }
             .filter {
-                it.isDirectVideoUrl() ||
-                    it.isKnownEmbedHost() ||
-                    it.contains("embed", true) ||
-                    it.contains("player", true)
+                it.contains(".m3u8", true) ||
+                    it.contains(".mp4", true) ||
+                    it.contains(".webm", true) ||
+                    isKnownHost(it)
             }
-            .filterNot { it.isJunkLink() }
+            .filterNot { isBadPlayableUrl(it) }
             .forEach { urls.add(it) }
 
         Regex(
-            """(?:data-file|data-video|data-url|data-src|data-embed|data-iframe|content)=["']([^"']+)["']""",
-            RegexOption.IGNORE_CASE
-        ).findAll(clean)
-            .mapNotNull { it.groupValues.getOrNull(1) }
-            .map { it.cleanEscaped().replace(".txt", ".m3u8") }
-            .filter {
-                it.isDirectVideoUrl() ||
-                    it.isKnownEmbedHost() ||
-                    it.contains("embed", true) ||
-                    it.contains("player", true)
-            }
-            .filterNot { it.isJunkLink() }
-            .forEach { urls.add(it) }
-
-        Regex(
-            """https?://[^"'\\\s<>]+?(?:jeniusplay|majorplay|dood|streamtape|filemoon|vidhide|voe|mixdrop|streamwish|wishfast|hglink|embed|player|stream)[^"'\\\s<>]*""",
+            """https?://[^"'\\\s<>]+?(?:jeniusplay|majorplay|filemoon|streamwish|wishfast|dood|streamtape|vidhide|vidguard|voe|mixdrop|mp4upload|hglink|hgcloud|lulustream|embed|player|stream)[^"'\\\s<>]*""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .map { it.value.cleanEscaped() }
-            .filterNot { it.isJunkLink() }
+            .filterNot { isBadPlayableUrl(it) }
             .forEach { urls.add(it) }
 
         return urls.toList()
     }
 
-    private fun extractSubtitleUrls(text: String, baseUrl: String): List<SubtitleFile> {
+    private fun extractSubtitles(
+        text: String,
+        baseUrl: String,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ) {
         val clean = text.cleanEscaped()
-        val subtitles = mutableListOf<SubtitleFile>()
-
         Regex(
-            """"(?:label|lang|language)"\s*:\s*"([^"]+)"[^}]*?"(?:file|path|url|src)"\s*:\s*"([^"]+\.(?:vtt|srt|ass)(?:\?[^"]*)?)"""",
+            """(?:file|src|url|path)\s*[:=]\s*["']([^"']+\.(?:vtt|srt|ass)(?:\?[^"']*)?)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(clean).forEach { match ->
-            val label = match.groupValues[1].ifBlank { "Subtitle" }
-            val link = normalizeUrl(match.groupValues[2], baseUrl)
-            subtitles.add(SubtitleFile(label, link))
+            val subUrl = normalizeUrl(match.groupValues[1], baseUrl)
+            val label = when {
+                subUrl.contains("ind", true) || subUrl.contains("indo", true) -> "Indonesian"
+                subUrl.contains("eng", true) || subUrl.contains("english", true) -> "English"
+                else -> "Subtitle"
+            }
+            subtitleCallback(newSubtitleFile(label, subUrl))
         }
-
-        Regex(
-            """https?://[^"'\\\s<>]+?\.(?:vtt|srt|ass)(?:\?[^"'\\\s<>]*)?""",
-            RegexOption.IGNORE_CASE
-        ).findAll(clean).forEach { match ->
-            subtitles.add(SubtitleFile("Subtitle", match.value.cleanEscaped()))
-        }
-
-        return subtitles.distinctBy { it.url }
     }
 
-    private fun decodeBase64Fragments(text: String): List<String> {
-        val results = mutableListOf<String>()
+    private fun decodeBase64Payloads(text: String): List<String> {
+        val results = linkedSetOf<String>()
 
-        Regex("""["']([A-Za-z0-9+/=]{40,})["']""")
-            .findAll(text)
-            .map { it.groupValues[1] }
-            .take(20)
-            .forEach { token ->
-                runCatching {
-                    val decoded = String(Base64.getDecoder().decode(token))
-                    if (
-                        decoded.contains("http", true) ||
-                            decoded.contains("iframe", true) ||
-                            decoded.contains("video", true) ||
-                            decoded.contains("source", true)
-                    ) {
-                        results.add(decoded.cleanEscaped())
-                    }
+        Regex(
+            """["']([A-Za-z0-9+/=]{40,})["']"""
+        ).findAll(text).forEach { match ->
+            val value = match.groupValues[1]
+            val decoded = runCatching {
+                String(Base64.getDecoder().decode(value))
+            }.getOrNull().orEmpty()
+
+            if (
+                decoded.contains("iframe", true) ||
+                decoded.contains("source", true) ||
+                decoded.contains(".m3u8", true) ||
+                decoded.contains(".mp4", true) ||
+                decoded.contains("embed", true)
+            ) {
+                results.add(decoded.cleanEscaped())
+            }
+        }
+
+        return results.toList()
+    }
+
+    private fun prioritizeEmbeds(links: Collection<String>): List<String> {
+        return links
+            .filterNot { isBadPlayableUrl(it) }
+            .distinct()
+            .sortedWith(compareBy<String> { hostPriority(it) }.thenBy { it.length })
+    }
+
+    private fun hostPriority(url: String): Int {
+        val value = url.lowercase()
+        return when {
+            value.contains("jeniusplay") -> 0
+            value.contains("majorplay") -> 1
+            value.contains("hglink") || value.contains("hgcloud") -> 2
+            value.contains("streamwish") || value.contains("wishfast") -> 3
+            value.contains("filemoon") -> 4
+            value.contains("vidhide") || value.contains("vidguard") -> 5
+            value.contains("voe") -> 6
+            value.contains("mixdrop") -> 7
+            value.contains("mp4upload") -> 8
+            value.contains("streamtape") -> 9
+            value.contains("dood") -> 10
+            value.contains("embed") -> 30
+            value.contains("player") -> 31
+            value.contains("stream") -> 32
+            else -> 50
+        }
+    }
+
+    private fun qualitySortRank(url: String): Int {
+        return when {
+            url.contains("2160", true) || url.contains("4k", true) -> 0
+            url.contains("1080", true) -> 1
+            url.contains("720", true) -> 2
+            url.contains("480", true) -> 3
+            url.contains("360", true) -> 4
+            else -> 5
+        }
+    }
+
+    private fun isKnownHost(url: String): Boolean {
+        val value = url.lowercase()
+        return listOf(
+            "jeniusplay", "majorplay", "filemoon", "streamwish", "wishfast", "dood",
+            "streamtape", "vidhide", "vidguard", "voe", "mixdrop", "mp4upload",
+            "hglink", "hgcloud", "lulustream", "embed", "player", "stream"
+        ).any { value.contains(it) }
+    }
+
+    private fun isHlsLike(url: String): Boolean {
+        return url.contains(".m3u8", true)
+    }
+
+    private fun isBadPlayableUrl(url: String): Boolean {
+        val value = url.lowercase()
+        return value.contains("vast") ||
+            value.contains("preroll") ||
+            value.contains("doubleclick") ||
+            value.contains("googlesyndication") ||
+            value.contains("analytics") ||
+            value.contains("tracking") ||
+            value.contains("banner") ||
+            value.contains("/ads/") ||
+            value.contains("mailto:") ||
+            value.contains("facebook.com") ||
+            value.contains("twitter.com") ||
+            value.contains("telegram") ||
+            value.contains("whatsapp") ||
+            value.contains("youtube.com") ||
+            value.contains("youtu.be") ||
+            value.contains("trailer") ||
+            value.contains("report")
+    }
+
+    private fun normalizeUrl(url: String, baseUrl: String): String {
+        val clean = url.cleanEscaped().trim()
+        return when {
+            clean.isBlank() -> ""
+            clean.startsWith("http", true) -> clean
+            clean.startsWith("//") -> "https:$clean"
+            clean.startsWith("/") -> {
+                val origin = Regex("""^https?://[^/]+""").find(baseUrl)?.value ?: mainUrl
+                "$origin$clean"
+            }
+            else -> runCatching { URI(baseUrl).resolve(clean).toString() }.getOrDefault(clean)
+        }
+    }
+
+    private fun getPoster(document: Document): String? {
+        return fixUrlNull(
+            document.selectFirst(
+                "meta[property=og:image], meta[name=twitter:image], meta[itemprop=thumbnailUrl], " +
+                    "video[poster], .player img, div.player img, .poster img, .thumb img, " +
+                    "img.wp-post-image, article img, img"
+            )?.let { element ->
+                when {
+                    element.hasAttr("content") -> element.attr("content")
+                    element.hasAttr("poster") -> element.attr("poster")
+                    else -> element.getImageAttr()
                 }
             }
-
-        return results
+        )?.takeIf { !isBadImage(it) }
     }
 
     private fun Element.getImageAttr(): String? {
         fun fromSrcSet(value: String?): String? {
             if (value.isNullOrBlank()) return null
-
-            return value
-                .split(",")
+            return value.split(",")
                 .map { it.trim().substringBefore(" ") }
-                .lastOrNull {
-                    it.isNotBlank() && !it.isBadImage()
-                }
+                .lastOrNull { it.isNotBlank() && !isBadImage(it) }
         }
 
         val raw = fromSrcSet(attr("data-srcset"))
@@ -983,133 +923,11 @@ class LayarBokep : MainAPI() {
             ?: attr("data-lazy-src").takeIf { it.isNotBlank() }
             ?: attr("src").takeIf { it.isNotBlank() }
 
-        return raw
-            ?.trim()
-            ?.takeIf { !it.isBadImage() }
+        return raw?.trim()?.takeIf { !isBadImage(it) }
     }
 
-    private fun getPoster(document: Document): String? {
-        return fixUrlNull(
-            document.selectFirst(
-                "meta[property=og:image], " +
-                    "meta[name=twitter:image], " +
-                    "meta[itemprop=thumbnailUrl], " +
-                    "video[poster], " +
-                    ".poster img, " +
-                    ".thumb img, " +
-                    ".player img, " +
-                    "img.wp-post-image, " +
-                    "article img, " +
-                    "img"
-            )?.let { element ->
-                when {
-                    element.hasAttr("content") -> element.attr("content")
-                    element.hasAttr("poster") -> element.attr("poster")
-                    else -> element.getImageAttr()
-                }
-            }
-        )?.takeIf { !it.isBadImage() }
-    }
-
-    private fun normalizeUrl(url: String, baseUrl: String): String {
-        val clean = url.cleanEscaped().trim()
-
-        return when {
-            clean.isBlank() -> ""
-            clean.startsWith("http", true) -> clean
-            clean.startsWith("//") -> "https:$clean"
-            clean.startsWith("/") -> originOf(baseUrl).trimEnd('/') + clean
-            else -> runCatching {
-                URI(baseUrl).resolve(clean).toString()
-            }.getOrDefault(clean)
-        }
-    }
-
-    private fun originOf(url: String): String {
-        return runCatching {
-            val uri = URI(url)
-            "${uri.scheme}://${uri.host}"
-        }.getOrDefault(mainUrl)
-    }
-
-    private fun hostPriority(url: String): Int {
+    private fun isBadImage(url: String): Boolean {
         val value = url.lowercase()
-
-        return when {
-            value.contains("jeniusplay") -> 0
-            value.contains("majorplay") -> 1
-            value.contains("hglink") -> 2
-            value.contains("streamwish") || value.contains("wishfast") -> 3
-            value.contains("filemoon") -> 4
-            value.contains("vidhide") -> 5
-            value.contains("voe.") -> 6
-            value.contains("mixdrop") -> 7
-            value.contains("streamtape") -> 8
-            value.contains("dood") -> 9
-            value.contains("embed") -> 20
-            value.contains("player") -> 21
-            value.contains("stream") -> 22
-            else -> 50
-        }
-    }
-
-    private fun String.isDirectVideoUrl(): Boolean {
-        return contains(".m3u8", true) ||
-            contains(".mp4", true) ||
-            contains(".webm", true)
-    }
-
-    private fun String.isHlsLike(): Boolean {
-        return contains(".m3u8", true)
-    }
-
-    private fun String.isKnownEmbedHost(): Boolean {
-        val value = lowercase()
-
-        return listOf(
-            "jeniusplay",
-            "majorplay",
-            "dood",
-            "streamtape",
-            "filemoon",
-            "vidhide",
-            "voe.",
-            "mixdrop",
-            "streamwish",
-            "wishfast",
-            "hglink",
-            "hlswish",
-            "lulustream",
-            "mp4upload"
-        ).any { value.contains(it) }
-    }
-
-    private fun String.isJunkLink(): Boolean {
-        val value = lowercase()
-
-        return value.isBlank() ||
-            value.startsWith("#") ||
-            value.startsWith("javascript") ||
-            value.contains("facebook.com") ||
-            value.contains("twitter.com") ||
-            value.contains("telegram") ||
-            value.contains("whatsapp") ||
-            value.contains("mailto:") ||
-            value.contains("googletagmanager") ||
-            value.contains("google-analytics") ||
-            value.contains("doubleclick") ||
-            value.contains("googlesyndication") ||
-            value.contains("adskeeper") ||
-            value.contains("adsterra") ||
-            value.contains("/ads/") ||
-            value.contains("banner") ||
-            value.contains("analytics") ||
-            value.contains("tracking")
-    }
-
-    private fun String.isBadImage(): Boolean {
-        val value = lowercase()
-
         return value.isBlank() ||
             value.startsWith("data:image") ||
             value.contains("blank") ||
@@ -1126,34 +944,26 @@ class LayarBokep : MainAPI() {
             value.endsWith(".svg")
     }
 
-    private fun String.isBadTitle(): Boolean {
-        val value = trim().lowercase()
-
+    private fun isBadTitle(title: String): Boolean {
+        val value = title.trim().lowercase()
         return value.isBlank() ||
             value == "home" ||
             value == "next" ||
             value == "previous" ||
             value == "search" ||
-            value == "cari" ||
-            value == "category" ||
-            value == "tag" ||
+            value == "trailer" ||
             value == "download" ||
-            value == "play" ||
-            value == "watch" ||
-            value == "login" ||
-            value == "register" ||
-            value.contains("privacy") ||
-            value.contains("dmca") ||
-            value.contains("contact")
+            value == "report" ||
+            value.length < 3
     }
 
-    private fun String.qualityFromUrl(): Int {
+    private fun qualityFromUrl(url: String): Int {
         return when {
-            contains("2160", true) || contains("4k", true) -> Qualities.P2160.value
-            contains("1080", true) -> Qualities.P1080.value
-            contains("720", true) -> Qualities.P720.value
-            contains("480", true) -> Qualities.P480.value
-            contains("360", true) -> Qualities.P360.value
+            url.contains("2160", true) || url.contains("4k", true) -> Qualities.P2160.value
+            url.contains("1080", true) -> Qualities.P1080.value
+            url.contains("720", true) -> Qualities.P720.value
+            url.contains("480", true) -> Qualities.P480.value
+            url.contains("360", true) -> Qualities.P360.value
             else -> Qualities.Unknown.value
         }
     }
@@ -1162,10 +972,7 @@ class LayarBokep : MainAPI() {
         return this
             .replace("\\/", "/")
             .replace("\\u0026", "&")
-            .replace("\\u003d", "=")
-            .replace("\\u002F", "/")
             .replace("&amp;", "&")
-            .replace("&quot;", "\"")
             .trim()
     }
 
