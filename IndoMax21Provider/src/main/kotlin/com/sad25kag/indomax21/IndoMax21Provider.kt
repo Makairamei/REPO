@@ -12,7 +12,7 @@ import javax.crypto.spec.SecretKeySpec
 
 class IndoMax21Provider : MainAPI() {
     
-    override var name = "IndoMax21 (Butuh VPN)"
+    override var name = "IndoMax21"
     override var mainUrl = "https://homecookingrocks.com"
     override var lang = "id"
     override val hasMainPage = true
