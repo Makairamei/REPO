@@ -30,21 +30,6 @@
     "name": "Savefilm"
   },
   {
-    "iconUrl": "https://i.ibb.co.com/YFbP1FSr/icon.png",
-    "apiVersion": 1,
-    "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-    "fileSize": 74677,
-    "status": 1,
-    "language": "id",
-    "authors": ["BetbetMiro"],
-    "tvTypes": ["TvSeries", "Movie", "Anime", "AsianDrama"],
-    "version": 1,
-    "internalName": "Moviebox",
-    "description": "📺 Moviebox - Netnaija - Sflix",
-    "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/Betbet/Moviebox.cs3",
-    "name": "Moviebox"
-  },
-  {
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/master/Betbet/Ultima.cs3",
         "status": 2,
         "version": 34,
