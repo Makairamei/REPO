@@ -35,7 +35,7 @@ import org.json.JSONObject
 
 class OneTouchTV : MainAPI() {
     override var mainUrl = base64Decode("aHR0cHM6Ly9hcGkzLmRldmNvcnAubWU=")
-    override var name = "OneTouchTV🧸"
+    override var name = "OneTouchTV"
     override val hasMainPage = true
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(
