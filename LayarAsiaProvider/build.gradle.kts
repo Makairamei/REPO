@@ -1,23 +1,18 @@
 version = 3
 
 cloudstream {
-    description = "Kawanfilm"
     language = "id"
-    authors = listOf("BetbetMiro")
+    authors = listOf("sad25kag")
+    description = "LayarAsia provider with clean Asian drama/movie categories and compile-safe extractor registrations."
 
-    /**
-     * Status int as the following:
-     * 0: Down
-     * 1: Ok
-     * 2: Slow
-     * 3: Beta only
-     * */
-    status = 1 // will be 3 if unspecified
+    status = 1
+
     tvTypes = listOf(
-        "AsianDrama",
-        "TvSeries",
         "Movie",
+        "TvSeries",
+        "AsianDrama"
     )
 
-    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://tv2.kawanfilm21.co&size=%size%"
+    isCrossPlatform = false
+    iconUrl = "https://www.google.com/s2/favicons?domain=layarasia.lol&sz=%size%"
 }
