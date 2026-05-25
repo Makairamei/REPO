@@ -1,5 +1,5 @@
 // Use an integer for version numbers
-version = 2
+version = 3
 
 cloudstream {
     description = "Watch movies, classic TV, animation, and public-domain video from the Internet Archive"
