@@ -9,7 +9,7 @@ import java.net.URLEncoder
 
 class NekokunProvider : MainAPI() {
     override var mainUrl = "https://nekokun.my.id"
-    override var name = "Nekokun😷"
+    override var name = "Nekokun"
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
