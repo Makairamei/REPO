@@ -1,9 +1,9 @@
-version = 1
+version = 13
 
 cloudstream {
     language = "id"
-    authors = listOf("BetbetMiro")
-    description = "IndoDrama21 rebuilt from scratch using active Dramaindo source with compact provider, categories, search, detail, episodes, and extractor fallback."
+    authors = listOf("sad25kag")
+    description = "JuraganFilm provider with current IDLIX API catalog, session-based playback resolver, subtitles, and Majorplay/Jeniusplay fallback extractors."
 
     /**
      * Status int as the following:
@@ -15,11 +15,12 @@ cloudstream {
     status = 1
 
     tvTypes = listOf(
-        "AsianDrama",
+        "Movie",
         "TvSeries",
-        "Movie"
+        "Anime",
+        "AsianDrama"
     )
 
     isCrossPlatform = false
-    iconUrl = "https://www.google.com/s2/favicons?domain=id.indodrama.net&sz=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=z1.idlixku.com&sz=%size%"
 }
