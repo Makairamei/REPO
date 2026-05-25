@@ -1,9 +1,9 @@
-version = 11
+version = 1
 
 cloudstream {
     language = "id"
     authors = listOf("BetbetMiro")
-    description = "JuraganFilm / Idlix movie, series, anime, and drama provider"
+    description = "IndoDrama21 rebuilt from scratch using active Dramaindo source with compact provider, categories, search, detail, episodes, and extractor fallback."
 
     /**
      * Status int as the following:
@@ -15,12 +15,11 @@ cloudstream {
     status = 1
 
     tvTypes = listOf(
-        "Movie",
+        "AsianDrama",
         "TvSeries",
-        "Anime",
-        "AsianDrama"
+        "Movie"
     )
 
     isCrossPlatform = false
-    iconUrl = "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/Icons/idlix.png"
+    iconUrl = "https://www.google.com/s2/favicons?domain=id.indodrama.net&sz=%size%"
 }

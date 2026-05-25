@@ -10,5 +10,7 @@ class JuraganFilmPlugin : Plugin() {
         registerMainAPI(JuraganFilmProvider())
         registerExtractorAPI(Jeniusplay())
         registerExtractorAPI(Majorplay())
+        registerExtractorAPI(E2eMajorplay())
+        registerExtractorAPI(M3u8Majorplay())
     }
 }

@@ -212,6 +212,16 @@ class Majorplay : ExtractorApi() {
     }
 }
 
+class E2eMajorplay : Majorplay() {
+    override var name = "Majorplay"
+    override var mainUrl = "https://e2e.majorplay.net"
+}
+
+class M3u8Majorplay : Majorplay() {
+    override var name = "Majorplay"
+    override var mainUrl = "https://m3u8.majorplay.net"
+}
+
 private fun extractStreamUrls(text: String): List<String> {
     val urls = linkedSetOf<String>()
 

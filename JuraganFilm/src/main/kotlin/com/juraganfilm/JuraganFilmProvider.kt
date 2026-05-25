@@ -32,10 +32,16 @@ import com.lagradost.cloudstream3.toNewSearchResponseList
 import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
+import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.getQualityFromName
+import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
+import kotlinx.coroutines.delay
 import java.text.Normalizer
 
 class JuraganFilmProvider : MainAPI() {
@@ -280,47 +286,68 @@ class JuraganFilmProvider : MainAPI() {
             AppUtils.parseJson<LoadData>(data)
         }.getOrNull() ?: return false
 
-        val response = runCatching {
+        val headers = mapOf(
+            "Referer" to "$mainUrl/",
+            "Origin" to mainUrl,
+            "Accept" to "application/json,text/plain,*/*",
+            "Content-Type" to "application/json"
+        )
+
+        val playResponse = runCatching {
             app.get(
                 "$mainUrl/api/watch/play-info/${parsed.type}/${parsed.id}",
-                timeout = 10000L
-            ).parsedSafe<Res>()
-        }.getOrNull() ?: return false
-
-        val redeemUrl = response.redeemUrlFinal ?: return false
-        val claim = response.claim.orEmpty()
-
-        val body = """
-            {
-                "claim": "$claim"
-            }
-        """.trimIndent().toRequestBody("application/json".toMediaType())
-
-        val iframeResponse = runCatching {
-            app.post(
-                redeemUrl,
-                requestBody = body,
+                headers = headers,
                 referer = mainUrl,
-                headers = mapOf(
-                    "Content-Type" to "application/json",
-                    "Accept" to "application/json"
-                )
-            ).parsedSafe<Iframe>()
+                timeout = 10000L
+            )
         }.getOrNull() ?: return false
+
+        val cookies = playResponse.cookies
+        val playInfo = playResponse.parsedSafe<Res>() ?: return false
+
+        val iframeResponse = when {
+            !playInfo.redeemUrlFinal.isNullOrBlank() -> {
+                redeemPlayback(
+                    redeemUrl = playInfo.redeemUrlFinal!!,
+                    claim = playInfo.claim.orEmpty(),
+                    headers = headers,
+                    cookies = cookies
+                )
+            }
+
+            !playInfo.gateTokenFinal.isNullOrBlank() -> {
+                val waitMs = ((playInfo.unlockAtFinal ?: 0L) - (playInfo.serverNowFinal ?: 0L))
+                    .coerceAtLeast(0L)
+                    .coerceAtMost(15000L)
+
+                if (waitMs > 0L) delay(waitMs)
+
+                val claimApi = runCatching {
+                    app.post(
+                        "$mainUrl/api/watch/session/claim",
+                        headers = headers,
+                        cookies = cookies,
+                        requestBody = """
+                            {
+                                "gateToken": "${playInfo.gateTokenFinal}"
+                            }
+                        """.trimIndent().toRequestBody("application/json".toMediaType()),
+                        timeout = 10000L
+                    ).parsedSafe<RedeemRes>()
+                }.getOrNull() ?: return false
+
+                redeemPlayback(
+                    redeemUrl = claimApi.redeemUrlFinal.orEmpty(),
+                    claim = claimApi.claimFinal.orEmpty(),
+                    headers = headers,
+                    cookies = cookies
+                )
+            }
+
+            else -> null
+        } ?: return false
 
         var found = false
-
-        iframeResponse.url
-            ?.takeIf { it.isNotBlank() }
-            ?.let { streamUrl ->
-                generateM3u8(
-                    source = name,
-                    streamUrl = streamUrl,
-                    referer = mainUrl
-                ).forEach(callback)
-
-                found = true
-            }
 
         iframeResponse.subtitles.orEmpty().forEach { subtitle ->
             val label = subtitle.label ?: subtitle.lang ?: "Subtitle"
@@ -334,7 +361,91 @@ class JuraganFilmProvider : MainAPI() {
             )
         }
 
+        iframeResponse.url
+            ?.takeIf { it.isNotBlank() }
+            ?.let { streamUrl ->
+                found = emitPlaybackUrl(
+                    streamUrl = streamUrl,
+                    referer = mainUrl,
+                    subtitleCallback = subtitleCallback,
+                    callback = callback
+                )
+            }
+
         return found
+    }
+
+    private suspend fun redeemPlayback(
+        redeemUrl: String,
+        claim: String,
+        headers: Map<String, String>,
+        cookies: Map<String, String>
+    ): Iframe? {
+        if (redeemUrl.isBlank() || claim.isBlank()) return null
+
+        return runCatching {
+            app.post(
+                redeemUrl,
+                requestBody = """
+                    {
+                        "claim": "$claim"
+                    }
+                """.trimIndent().toRequestBody("application/json".toMediaType()),
+                referer = mainUrl,
+                headers = headers,
+                cookies = cookies,
+                timeout = 10000L
+            ).parsedSafe<Iframe>()
+        }.getOrNull()
+    }
+
+    private suspend fun emitPlaybackUrl(
+        streamUrl: String,
+        referer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val fixedUrl = streamUrl.trim().replace("\\/", "/").replace(".txt", ".m3u8")
+        if (fixedUrl.isBlank()) return false
+
+        return when {
+            fixedUrl.contains(".m3u8", true) -> {
+                generateM3u8(
+                    source = name,
+                    streamUrl = fixedUrl,
+                    referer = referer
+                ).forEach(callback)
+                true
+            }
+
+            fixedUrl.contains(".mp4", true) || fixedUrl.contains(".webm", true) -> {
+                callback(
+                    newExtractorLink(
+                        source = name,
+                        name = name,
+                        url = fixedUrl,
+                        type = ExtractorLinkType.VIDEO
+                    ) {
+                        this.referer = referer
+                        this.quality = getQualityFromName(fixedUrl).takeIf {
+                            it != Qualities.Unknown.value
+                        } ?: Qualities.Unknown.value
+                    }
+                )
+                true
+            }
+
+            fixedUrl.startsWith("http", true) -> {
+                loadExtractor(
+                    fixedUrl,
+                    referer,
+                    subtitleCallback,
+                    callback
+                )
+            }
+
+            else -> false
+        }
     }
 
     private fun ApiItem.toSearchResponse(): SearchResponse? {
@@ -566,11 +677,35 @@ data class LoadData(
 )
 
 data class Res(
+    @JsonProperty("gateToken") val gateToken: String? = null,
+    @JsonProperty("gate_token") val gateTokenAlt: String? = null,
+
+    @JsonProperty("serverNow") val serverNow: Long? = null,
+    @JsonProperty("server_now") val serverNowAlt: Long? = null,
+
+    @JsonProperty("unlockAt") val unlockAt: Long? = null,
+    @JsonProperty("unlock_at") val unlockAtAlt: Long? = null,
+
     @JsonProperty("claim") val claim: String? = null,
 
     @JsonProperty("redeemUrl") val redeemUrl: String? = null,
     @JsonProperty("redeem_url") val redeemUrlAlt: String? = null
 ) {
+    val gateTokenFinal: String? get() = gateToken ?: gateTokenAlt
+    val serverNowFinal: Long? get() = serverNow ?: serverNowAlt
+    val unlockAtFinal: Long? get() = unlockAt ?: unlockAtAlt
+    val redeemUrlFinal: String? get() = redeemUrl ?: redeemUrlAlt
+}
+
+data class RedeemRes(
+    @JsonProperty("kind") val kind: String? = null,
+    @JsonProperty("claim") val claim: String? = null,
+    @JsonProperty("redeemUrl") val redeemUrl: String? = null,
+    @JsonProperty("redeem_url") val redeemUrlAlt: String? = null,
+    @JsonProperty("videoId") val videoId: String? = null,
+    @JsonProperty("video_id") val videoIdAlt: String? = null
+) {
+    val claimFinal: String? get() = claim
     val redeemUrlFinal: String? get() = redeemUrl ?: redeemUrlAlt
 }
 
