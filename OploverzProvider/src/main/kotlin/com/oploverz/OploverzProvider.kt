@@ -9,7 +9,6 @@ import kotlinx.coroutines.runBlocking
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
-
 class OploverzProvider : MainAPI() {
     override var mainUrl = "https://anime.oploverz.ac"
     private val backAPI = "https://backapi.oploverz.ac"
@@ -32,7 +31,7 @@ class OploverzProvider : MainAPI() {
                 else -> TvType.Anime
             }
         }
-        
+
         var context: android.content.Context? = null
 
         fun getStatus(t: String?): ShowStatus {
@@ -184,7 +183,6 @@ class OploverzProvider : MainAPI() {
             addMalId(tracker?.malId)
             addAniListId(tracker?.aniId?.toIntOrNull())
         }
-
     }
 
     override suspend fun loadLinks(
@@ -193,7 +191,6 @@ class OploverzProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-
         val doc = app.get(data).document
 
         doc.select("div.flex.flex-row.items-start").amap { selector ->
@@ -233,7 +230,7 @@ class OploverzProvider : MainAPI() {
         }
     }
 
-    private fun getQuality(quality: String) : Int {
+    private fun getQuality(quality: String): Int {
         return when {
             quality.equals("Mini", false) -> Qualities.P480.value
             quality.equals("HD", false) -> Qualities.P720.value
