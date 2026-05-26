@@ -105,14 +105,6 @@ class ReynimeProvider : MainAPI() {
         val firstEpisode: Int = 1
     )
 
-    private data class ApiEpisode(
-        val id: Int,
-        val episode: Int,
-        val title: String? = null,
-        val poster: String? = null,
-        val description: String? = null
-    )
-
     private val episodeLabelRegex = Regex("""(?:episode|eps?|ep|bab)\s*[-:]?\s*\d{1,4}|^\s*\d{1,4}\s*$""", RegexOption.IGNORE_CASE)
     private val apiRootRegex = Regex("""^https?://[^/]+""")
     private val duplicateSlashRegex = Regex("""/{2,}""")
@@ -227,37 +219,6 @@ class ReynimeProvider : MainAPI() {
             else -> sourceSeries
         }
         return items.ifEmpty { sourceSeries }.map { it.toSearchResponse() }
-    }
-
-    private suspend fun fetchSourceCatalog(data: String): List<SearchResponse> {
-        val key = data.lowercase()
-        val urls = when {
-            key == "featured" -> listOf(mainUrl)
-            key == "updated" -> listOf("$mainUrl/browse?sort=updated", "$mainUrl/backend/api/series.php?sort=updated&limit=60")
-            key == "ongoing" -> listOf("$mainUrl/browse?status=Ongoing", "$mainUrl/backend/api/series.php?status=Ongoing&limit=60")
-            key == "completed" -> listOf("$mainUrl/browse?status=Completed", "$mainUrl/backend/api/series.php?status=Completed&limit=60")
-            key == "anime" -> listOf("$mainUrl/browse?type=Anime", "$mainUrl/backend/api/series.php?type=Anime&limit=60")
-            key == "donghua" || key == "all" -> listOf("$mainUrl/browse?type=Donghua", "$mainUrl/browse", "$mainUrl/backend/api/series.php?type=Donghua&limit=60")
-            key.startsWith("genre:") -> {
-                val genre = key.substringAfter("genre:")
-                listOf("$mainUrl/browse?genre=$genre", "$mainUrl/genre/$genre", "$mainUrl/tag/$genre", "$mainUrl/backend/api/series.php?genre=$genre&limit=60")
-            }
-            else -> listOf("$mainUrl/browse", "$mainUrl/backend/api/series.php?limit=60")
-        }
-
-        val results = linkedMapOf<String, SearchResponse>()
-        urls.forEach { url ->
-            val response = runCatching { app.get(url, headers = headers, referer = mainUrl, timeout = 8L) }.getOrNull() ?: return@forEach
-            val raw = response.text.cleanEscaped()
-            parseApiSeriesCards(raw).forEach { results[it.url] = it }
-            parseMarkdownLikeCards(raw).forEach { results[it.url] = it }
-            parseHtmlCards(response.document).forEach { results[it.url] = it }
-            parseRawSeriesLinks(raw).forEach { results[it.url] = it }
-        }
-        return results.values
-            .filter { !isBadTitle(it.name) }
-            .filterNot { it.name.equals("Beranda", true) || it.name.equals("Donghua Terbaru", true) }
-            .toList()
     }
 
     private fun parseMarkdownLikeCards(text: String): List<SearchResponse> {
@@ -408,9 +369,15 @@ class ReynimeProvider : MainAPI() {
                 .distinct()
                 .ifEmpty { listOf(seed?.kind ?: "Donghua") }
 
-        val episodes = seed?.let { fetchApiEpisodes(it.id, poster, description) }.orEmpty()
-            .ifEmpty { parseEpisodes(document, html, pageUrl, poster) }
-            .ifEmpty { fallbackEpisodes(pageUrl, seed, poster, description) }
+        val episodes = if (seed != null) {
+            // Runtime note: the public app shell can leak cached/global episode payloads.
+            // Keep detail episode rows deterministic from validated seed metadata, then resolve
+            // the real playable link inside loadLinks with exact series/episode probes.
+            fallbackEpisodes(pageUrl, seed, poster, description)
+        } else {
+            parseEpisodes(document, html, pageUrl, poster)
+                .ifEmpty { fallbackEpisodes(pageUrl, seed, poster, description) }
+        }
 
         return newAnimeLoadResponse(title, seed?.let { seriesUrl(it) } ?: pageUrl, seed?.type ?: findTypeFromSeedOrText(pageUrl, title)) {
             engName = title
@@ -421,24 +388,6 @@ class ReynimeProvider : MainAPI() {
             this.episodes = hashMapOf(DubStatus.Subbed to episodes)
             recommendations = sourceSeries.filter { it.id != seed?.id }.take(12).map { it.toSearchResponse() }
         }
-    }
-
-    private suspend fun fetchApiEpisodes(seriesId: Int, poster: String?, description: String?): List<Episode> {
-        val text = runCatching {
-            app.get(episodeListApi(seriesId), headers = apiHeaders(), referer = "$mainUrl/series/$seriesId", timeout = 12L).text
-        }.getOrNull().orEmpty()
-
-        return parseApiEpisodeList(text, expectedSeriesId = seriesId)
-            .distinctBy { it.id }
-            .sortedBy { it.episode }
-            .map { item ->
-                newEpisode(watchUrl(item.id, seriesId, item.episode)) {
-                    name = item.title?.cleanTitle()?.takeIf { it.isNotBlank() } ?: "Episode ${item.episode}"
-                    episode = item.episode
-                    posterUrl = item.poster?.let { normalizePoster(normalizeUrl(it, mainUrl)) } ?: poster
-                    this.description = item.description ?: description
-                }
-            }
     }
 
     private fun parseEpisodes(document: Document, html: String, pageUrl: String, poster: String?): List<Episode> {
@@ -502,15 +451,39 @@ class ReynimeProvider : MainAPI() {
         return "$mainUrl/watch/$episodeId#$meta"
     }
 
+    private data class PlaybackContext(
+        val requestedUrl: String,
+        val pageUrl: String,
+        val seriesId: String?,
+        val episode: String?,
+        val directEpisodeId: String?,
+        val seed: SourceSeries?
+    )
+
+    private data class PlaybackBuckets(
+        val directLinks: LinkedHashSet<String> = linkedSetOf(),
+        val embedLinks: LinkedHashSet<String> = linkedSetOf()
+    )
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        val context = parsePlaybackContext(data)
+
+        // Keep the resolver order explicit. This makes runtime failures easier to isolate:
+        // backend API first, page/player scraping second, and external fallback last.
+        if (resolveFromBackend(context, subtitleCallback, callback)) return true
+        if (resolveFromPage(context, subtitleCallback, callback)) return true
+        return resolveFromEmergencyFallback(context, subtitleCallback, callback)
+    }
+
+    private fun parsePlaybackContext(data: String): PlaybackContext {
         val requestedUrl = normalizeUrl(data, mainUrl)
         val syntheticWatch = Regex("""/watch/(\d+)/(\d+)""").find(requestedUrl)
-        val directWatchEpisodeId = Regex("""/watch/(\d+)(?:[/?#]|$)""").find(requestedUrl)
+        val directEpisodeId = Regex("""/watch/(\d+)(?:[/?#]|$)""").find(requestedUrl)
             ?.groupValues
             ?.getOrNull(1)
             ?.takeIf { syntheticWatch == null }
@@ -522,68 +495,184 @@ class ReynimeProvider : MainAPI() {
             ?: Regex("""episode(?:_number)?=(\d+)""").find(requestedUrl)?.groupValues?.getOrNull(1)
             ?: Regex("""#episode-(\d+)""").find(requestedUrl)?.groupValues?.getOrNull(1)
         val seed = seriesId?.toIntOrNull()?.let { value -> sourceSeries.firstOrNull { it.id == value } }
-        val pageUrl = seed?.let { seriesUrl(it) } ?: requestedUrl.substringBefore("#")
+        val pageUrl = seed?.let { seriesUrl(it) } ?: requestedUrl.substringBefore("#").substringBefore("?")
 
-        val directLinks = linkedSetOf<String>()
-        val embedLinks = linkedSetOf<String>()
+        return PlaybackContext(
+            requestedUrl = requestedUrl,
+            pageUrl = pageUrl,
+            seriesId = seriesId,
+            episode = episode,
+            directEpisodeId = directEpisodeId,
+            seed = seed
+        )
+    }
 
-        collectBackendEpisodeUrls(seriesId, episode, directWatchEpisodeId, pageUrl).forEach { url ->
-            addCandidate(url, mainUrl, directLinks, embedLinks)
+    private suspend fun resolveFromBackend(
+        context: PlaybackContext,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val buckets = PlaybackBuckets()
+
+        collectBackendEpisodeUrls(
+            seriesId = context.seriesId,
+            episodeNumber = context.episode,
+            episodeId = context.directEpisodeId,
+            referer = context.pageUrl
+        ).forEach { url ->
+            addCandidate(url, mainUrl, buckets.directLinks, buckets.embedLinks)
         }
 
-        buildPlaybackCandidates(pageUrl, seed, episode).forEach { url ->
-            val response = runCatching { app.get(url, headers = headers, referer = pageUrl, timeout = 10L) }.getOrNull() ?: return@forEach
+        return emitCollectedLinks(
+            buckets = buckets,
+            referer = context.pageUrl,
+            subtitleCallback = subtitleCallback,
+            callback = callback
+        )
+    }
+
+    private suspend fun resolveFromPage(
+        context: PlaybackContext,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val buckets = PlaybackBuckets()
+
+        playbackProbeUrls(context).forEach { url ->
+            val response = runCatching {
+                app.get(url, headers = headers, referer = context.pageUrl, timeout = 10L)
+            }.getOrNull() ?: return@forEach
+
             val raw = response.text.cleanEscaped()
-            collectCandidatesFromDocument(response.document, url, directLinks, embedLinks)
-            extractPlayableUrls(raw).forEach { addCandidate(it, url, directLinks, embedLinks) }
+            collectCandidatesFromDocument(response.document, url, buckets.directLinks, buckets.embedLinks)
+            extractPlayableUrls(raw).forEach { addCandidate(it, url, buckets.directLinks, buckets.embedLinks) }
             extractSubtitles(raw, url, subtitleCallback)
-            decodeBase64Payloads(raw).forEach { decoded -> extractPlayableUrls(decoded).forEach { addCandidate(it, url, directLinks, embedLinks) } }
-            runCatching { if (!getPacked(raw).isNullOrEmpty()) getAndUnpack(raw) else null }.getOrNull()?.cleanEscaped()
-                ?.let { unpacked -> extractPlayableUrls(unpacked).forEach { addCandidate(it, url, directLinks, embedLinks) } }
+            decodeBase64Payloads(raw).forEach { decoded ->
+                extractPlayableUrls(decoded).forEach { addCandidate(it, url, buckets.directLinks, buckets.embedLinks) }
+            }
+            runCatching { if (!getPacked(raw).isNullOrEmpty()) getAndUnpack(raw) else null }
+                .getOrNull()
+                ?.cleanEscaped()
+                ?.let { unpacked -> extractPlayableUrls(unpacked).forEach { addCandidate(it, url, buckets.directLinks, buckets.embedLinks) } }
         }
 
+        return emitCollectedLinks(
+            buckets = buckets,
+            referer = context.pageUrl,
+            subtitleCallback = subtitleCallback,
+            callback = callback
+        )
+    }
+
+    private suspend fun resolveFromEmergencyFallback(
+        context: PlaybackContext,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
         var found = false
-        prioritizeEmbeds(embedLinks).take(12).forEach { embed ->
-            if (runCatching { loadExtractor(embed, pageUrl, subtitleCallback, callback) }.getOrDefault(false)) found = true
-            resolveNestedLinks(embed, pageUrl).forEach { nested ->
-                if (emitDirectLink(nested, embed, callback)) found = true
+        resolveDailymotionFallback(context.seed, context.episode, context.pageUrl).forEach { dmUrl ->
+            if (runCatching { loadExtractor(dmUrl, context.pageUrl, subtitleCallback, callback) }.getOrDefault(false)) {
+                found = true
             }
-        }
-        directLinks.forEach { link ->
-            if (emitDirectLink(link, pageUrl, callback)) found = true
         }
         return found
     }
 
-    private fun episodeListApi(seriesId: Int): String {
-        return "$mainUrl/backend/api/episodes.php?series_id=$seriesId&limit=500&_t=${System.currentTimeMillis()}"
-    }
+    private suspend fun emitCollectedLinks(
+        buckets: PlaybackBuckets,
+        referer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        var found = false
 
-    private fun episodeDetailApi(id: String): String {
-        return "$mainUrl/backend/api/episodes.php?id=$id&_t=${System.currentTimeMillis()}"
-    }
-
-    private fun buildPlaybackCandidates(pageUrl: String, seed: SourceSeries?, episode: String?): List<String> {
-        val candidates = linkedSetOf<String>()
-        candidates.add(pageUrl)
-        seed?.let {
-            candidates.add(seriesUrl(it))
-            candidates.add(bareSeriesUrl(it))
-            candidates.add(legacySeriesUrl(it))
-            episode?.let { ep ->
-                candidates.add("$mainUrl/watch/${it.id}/$ep")
-                candidates.add("$mainUrl/watch/${it.id}?episode=$ep")
-                candidates.add("$mainUrl/watch?series=${it.id}&episode=$ep")
-                candidates.add("$mainUrl/api/watch/${it.id}/$ep")
-                candidates.add("$mainUrl/api/watch?series=${it.id}&episode=$ep")
-                candidates.add("$mainUrl/api/stream?series=${it.id}&episode=$ep")
-                candidates.add("$mainUrl/api/episode?series=${it.id}&episode=$ep")
-                candidates.add("$mainUrl/api/episodes?series=${it.id}&episode=$ep")
-                candidates.add("$mainUrl/api/video?series=${it.id}&episode=$ep")
+        prioritizeEmbeds(buckets.embedLinks).take(8).forEach { embed ->
+            if (runCatching { loadExtractor(embed, referer, subtitleCallback, callback) }.getOrDefault(false)) {
+                found = true
             }
+            resolveNestedLinks(embed, referer).forEach { nested ->
+                if (emitDirectLink(nested, embed, callback)) found = true
+            }
+        }
+
+        buckets.directLinks.forEach { link ->
+            if (emitDirectLink(link, referer, callback)) found = true
+        }
+
+        return found
+    }
+
+    private fun playbackProbeUrls(context: PlaybackContext): List<String> {
+        val candidates = linkedSetOf<String>()
+        candidates.add(context.pageUrl)
+        context.seed?.let { item ->
+            candidates.add(seriesUrl(item))
+            candidates.add(bareSeriesUrl(item))
+            candidates.add(legacySeriesUrl(item))
+            context.episode?.let { ep ->
+                candidates.add("$mainUrl/watch/${item.id}/$ep")
+                candidates.add("$mainUrl/watch/${item.id}?episode=$ep")
+                candidates.add("$mainUrl/watch?series=${item.id}&episode=$ep")
+            }
+        }
+        context.directEpisodeId?.let { episodeId ->
+            candidates.add("$mainUrl/watch/$episodeId")
         }
         return candidates.toList()
     }
+    private suspend fun resolveDailymotionFallback(seed: SourceSeries?, episode: String?, referer: String): List<String> {
+        if (seed == null || episode.isNullOrBlank()) return emptyList()
+        val ep = episode.toIntOrNull() ?: return emptyList()
+        val queries = listOf(
+            "${seed.title} Episode $ep Sub Indo",
+            "${seed.title} Ep $ep",
+            "${seed.title} $ep Reynime"
+        )
+
+        val results = linkedSetOf<String>()
+        queries.forEach { query ->
+            val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+            listOf(
+                "https://www.dailymotion.com/search/$encoded/videos",
+                "https://www.dailymotion.com/reynime/videos"
+            ).forEach { url ->
+                val raw = runCatching {
+                    app.get(url, headers = headers + mapOf("Accept" to "text/html,*/*"), referer = referer, timeout = 10L).text
+                }.getOrNull()?.cleanEscaped().orEmpty()
+                if (raw.isBlank()) return@forEach
+
+                Regex("""(?:/video/|%2Fvideo%2F)([A-Za-z0-9]+)""", RegexOption.IGNORE_CASE)
+                    .findAll(raw)
+                    .forEach { match ->
+                        val id = match.groupValues.getOrNull(1).orEmpty()
+                        if (id.isBlank()) return@forEach
+                        val nearby = raw.substring(
+                            (match.range.first - 900).coerceAtLeast(0),
+                            (match.range.last + 1400).coerceAtMost(raw.length)
+                        )
+                        if (looksLikeDailymotionEpisode(seed, ep, nearby)) {
+                            results.add("https://www.dailymotion.com/video/$id")
+                        }
+                    }
+            }
+        }
+        return results.take(6)
+    }
+
+    private fun looksLikeDailymotionEpisode(seed: SourceSeries, episode: Int, text: String): Boolean {
+        val haystack = text.cleanEscaped().lowercase()
+        val slug = haystack.slugify()
+        val titleTokens = seed.title
+            .slugify()
+            .split('-')
+            .filter { it.length >= 4 && it !in setOf("season", "episode", "donghua", "anime", "the", "and") }
+        val matchedTitleTokens = titleTokens.count { slug.contains(it) }
+        val episodePattern = Regex("""(?i)(episode|eps?|ep|bab|e)\s*[-:_ ]*0*${episode}\b|\b0*${episode}\s*(sub\s*indo|subtitle|reynime)""")
+        val hasEpisode = episodePattern.containsMatchIn(haystack) || slug.contains("episode-$episode") || slug.contains("ep-$episode")
+        val hasReynimeOrSub = haystack.contains("reynime") || haystack.contains("sub indo") || haystack.contains("subtitle indonesia")
+        return hasEpisode && hasReynimeOrSub && matchedTitleTokens >= 2
+    }
+
     private data class BackendEpisodeRecord(
         val id: String?,
         val seriesId: String?,
@@ -597,63 +686,143 @@ class ReynimeProvider : MainAPI() {
         episodeId: String?,
         referer: String
     ): List<String> {
-        val urls = linkedSetOf<String>()
-        val idsToProbe = linkedSetOf<String>()
+        val collected = linkedSetOf<String>()
+        val episodeIdsToProbe = linkedSetOf<String>()
 
-        suspend fun probe(url: String): List<BackendEpisodeRecord> {
-            val response = runCatching { app.get(url, headers = apiHeaders(), referer = referer, timeout = 10L) }.getOrNull() ?: return emptyList()
-            return parseBackendEpisodeRecords(response.text)
-        }
-
-        fun matchingSeries(records: List<BackendEpisodeRecord>): List<BackendEpisodeRecord> {
-            if (seriesId.isNullOrBlank()) return records
-            val exact = records.filter { it.seriesId == seriesId }
-            if (exact.isNotEmpty()) return exact
-            return records.filter { it.seriesId.isNullOrBlank() }
-        }
-
-        episodeId?.let { id ->
-            matchingSeries(probe("$mainUrl/backend/api/episodes.php?id=$id&_t=${System.currentTimeMillis()}")).forEach { record ->
-                record.urls.forEach(urls::add)
+        episodeId?.takeIf { it.isNotBlank() }?.let { id ->
+            probeEpisodeById(id, seriesId, referer).forEach { record ->
+                record.urls.forEach(collected::add)
+                record.id?.takeIf { it.isNotBlank() }?.let(episodeIdsToProbe::add)
             }
         }
 
         if (!seriesId.isNullOrBlank()) {
-            val records = matchingSeries(probe("$mainUrl/backend/api/episodes.php?series_id=$seriesId&limit=1000&_t=${System.currentTimeMillis()}"))
-            val selected = records.filter { record ->
-                episodeNumber.isNullOrBlank() || record.episodeNumber == episodeNumber
-            }
-            selected.forEach { record ->
-                record.urls.forEach(urls::add)
-                record.id?.let(idsToProbe::add)
-            }
+            probeEpisodesBySeries(seriesId, referer)
+                .filter { record -> episodeNumber.isNullOrBlank() || record.matchesEpisode(episodeNumber) }
+                .forEach { record ->
+                    record.urls.forEach(collected::add)
+                    record.id?.takeIf { it.isNotBlank() }?.let(episodeIdsToProbe::add)
+                }
 
-            if (urls.isEmpty() && !episodeNumber.isNullOrBlank()) {
-                listOf(
-                    "$mainUrl/backend/api/episodes.php?series_id=$seriesId&episode=$episodeNumber&_t=${System.currentTimeMillis()}",
-                    "$mainUrl/backend/api/episodes.php?series_id=$seriesId&episode_number=$episodeNumber&_t=${System.currentTimeMillis()}",
-                    "$mainUrl/backend/api/watch.php?series_id=$seriesId&episode=$episodeNumber&_t=${System.currentTimeMillis()}",
-                    "$mainUrl/backend/api/stream.php?series_id=$seriesId&episode=$episodeNumber&_t=${System.currentTimeMillis()}"
-                ).forEach { exactUrl ->
-                    matchingSeries(probe(exactUrl)).forEach { record ->
-                        record.urls.forEach(urls::add)
-                        record.id?.let(idsToProbe::add)
-                    }
+            if (collected.isEmpty() && !episodeNumber.isNullOrBlank()) {
+                probeEpisodesBySeriesEpisode(seriesId, episodeNumber, referer).forEach { record ->
+                    record.urls.forEach(collected::add)
+                    record.id?.takeIf { it.isNotBlank() }?.let(episodeIdsToProbe::add)
                 }
             }
         }
 
-        episodeId?.let { idsToProbe.remove(it) }
-        idsToProbe.take(4).forEach { id ->
-            matchingSeries(probe("$mainUrl/backend/api/episodes.php?id=$id&_t=${System.currentTimeMillis()}")).forEach { record ->
-                record.urls.forEach(urls::add)
+        episodeId?.let { episodeIdsToProbe.remove(it) }
+
+        if (collected.isEmpty()) {
+            episodeIdsToProbe.take(6).forEach { id ->
+                probeEpisodeStreamsById(id, referer).forEach(collected::add)
             }
         }
 
-        return urls
+        return collected
             .map { it.cleanEscaped().trim() }
             .filter { it.startsWith("http", true) || it.startsWith("//") }
             .distinct()
+    }
+
+    private suspend fun probeEpisodeById(
+        episodeId: String,
+        expectedSeriesId: String?,
+        referer: String
+    ): List<BackendEpisodeRecord> {
+        val url = "$mainUrl/backend/api/episodes.php?id=$episodeId&_t=${System.currentTimeMillis()}"
+        return probeBackendRecords(url, referer).filterBySeries(expectedSeriesId)
+    }
+
+    private suspend fun probeEpisodesBySeries(
+        seriesId: String,
+        referer: String
+    ): List<BackendEpisodeRecord> {
+        val url = "$mainUrl/backend/api/episodes.php?series_id=$seriesId&limit=1000&_t=${System.currentTimeMillis()}"
+        return probeBackendRecords(url, referer).filterBySeries(seriesId)
+    }
+
+    private suspend fun probeEpisodesBySeriesEpisode(
+        seriesId: String,
+        episodeNumber: String,
+        referer: String
+    ): List<BackendEpisodeRecord> {
+        val queries = listOf(
+            "$mainUrl/backend/api/episodes.php?series_id=$seriesId&episode=$episodeNumber&_t=${System.currentTimeMillis()}",
+            "$mainUrl/backend/api/episodes.php?series_id=$seriesId&episode_number=$episodeNumber&_t=${System.currentTimeMillis()}",
+            "$mainUrl/backend/api/episodes.php?series_id=$seriesId&ep=$episodeNumber&_t=${System.currentTimeMillis()}",
+            "$mainUrl/backend/api/episodes.php?series_id=$seriesId&number=$episodeNumber&_t=${System.currentTimeMillis()}",
+            "$mainUrl/backend/api/watch.php?series_id=$seriesId&episode=$episodeNumber&_t=${System.currentTimeMillis()}",
+            "$mainUrl/backend/api/stream.php?series_id=$seriesId&episode=$episodeNumber&_t=${System.currentTimeMillis()}"
+        )
+
+        val results = linkedSetOf<BackendEpisodeRecord>()
+        queries.forEach { url ->
+            probeBackendRecords(url, referer)
+                .filterBySeries(seriesId)
+                .filter { record -> record.episodeNumber.isNullOrBlank() || record.matchesEpisode(episodeNumber) || record.urls.isNotEmpty() }
+                .forEach(results::add)
+        }
+        return results.toList()
+    }
+
+    private suspend fun probeEpisodeStreamsById(
+        episodeId: String,
+        referer: String
+    ): List<String> {
+        val queries = listOf(
+            "$mainUrl/backend/api/episodes.php?id=$episodeId&_t=${System.currentTimeMillis()}",
+            "$mainUrl/backend/api/watch.php?id=$episodeId&_t=${System.currentTimeMillis()}",
+            "$mainUrl/backend/api/stream.php?id=$episodeId&_t=${System.currentTimeMillis()}",
+            "$mainUrl/backend/api/player.php?id=$episodeId&_t=${System.currentTimeMillis()}"
+        )
+
+        val urls = linkedSetOf<String>()
+        queries.forEach { url ->
+            val response = runCatching {
+                app.get(url, headers = apiHeaders(), referer = referer, timeout = 10L)
+            }.getOrNull() ?: return@forEach
+
+            val raw = response.text.cleanEscaped()
+            parseBackendEpisodeRecords(raw).forEach { record ->
+                record.urls.forEach(urls::add)
+            }
+            extractPlayableUrls(raw).forEach(urls::add)
+        }
+        return urls.toList()
+    }
+
+    private suspend fun probeBackendRecords(
+        url: String,
+        referer: String
+    ): List<BackendEpisodeRecord> {
+        val response = runCatching {
+            app.get(url, headers = apiHeaders(), referer = referer, timeout = 10L)
+        }.getOrNull() ?: return emptyList()
+
+        return parseBackendEpisodeRecords(response.text)
+    }
+
+    private fun List<BackendEpisodeRecord>.filterBySeries(seriesId: String?): List<BackendEpisodeRecord> {
+        if (seriesId.isNullOrBlank()) return this
+        val exact = filter { it.seriesId == seriesId }
+        return if (exact.isNotEmpty()) exact else filter { it.seriesId.isNullOrBlank() }
+    }
+
+    private fun BackendEpisodeRecord.matchesEpisode(expectedEpisode: String?): Boolean {
+        if (expectedEpisode.isNullOrBlank()) return true
+        val actual = episodeNumber ?: return false
+        return normalizeEpisodeNumber(actual) == normalizeEpisodeNumber(expectedEpisode)
+    }
+
+    private fun normalizeEpisodeNumber(value: String): String {
+        return Regex("""\d{1,4}""")
+            .find(value)
+            ?.value
+            ?.trimStart('0')
+            ?.ifBlank { "0" }
+            ?: value.trim()
     }
 
     private fun parseBackendEpisodeRecords(text: String): List<BackendEpisodeRecord> {
@@ -777,60 +946,6 @@ class ReynimeProvider : MainAPI() {
             }
         }
         return results.values.toList()
-    }
-
-    private fun parseApiEpisodeList(text: String, expectedSeriesId: Int? = null): List<ApiEpisode> {
-        val clean = text.cleanEscaped().trim()
-        if (clean.isBlank() || !(clean.startsWith("[") || clean.startsWith("{"))) return emptyList()
-        val results = linkedMapOf<Int, ApiEpisode>()
-        val responseHasSeriesScope = Regex("""[\"'](?:series_id|seriesId|anime_id|animeId)[\"']\s*:""", RegexOption.IGNORE_CASE).containsMatchIn(clean)
-
-        fun parseObject(obj: JSONObject) {
-            val recordSeriesId = obj.pickInt("series_id", "seriesId", "anime_id", "animeId")
-            if (expectedSeriesId != null && responseHasSeriesScope && recordSeriesId != expectedSeriesId) return
-
-            val title = obj.pickString("title", "name", "episode_title", "label", "judul")
-            val explicitEpisode = obj.pickInt("episode", "episode_number", "episodeNumber", "number", "ep", "eps")
-            val labelEpisode = extractEpisodeNumber(title.orEmpty(), obj.toString())
-            val hasPlayable = backendVideoKeys.any { obj.pickString(it) != null }
-
-            if (!obj.looksLikeEpisodeObject() && explicitEpisode == null && labelEpisode == null && !hasPlayable) return
-
-            val id = obj.pickInt("episode_id", "episodeId", "watch_id", "pid", "post_id")
-                ?: obj.pickInt("id")?.takeIf { obj.looksLikeEpisodeObject() || explicitEpisode != null || labelEpisode != null || hasPlayable }
-                ?: return
-
-            val ep = explicitEpisode ?: labelEpisode ?: results.size + 1
-
-            results[id] = ApiEpisode(
-                id = id,
-                episode = ep,
-                title = title,
-                poster = obj.pickString("poster", "image", "thumbnail", "cover", "thumb"),
-                description = obj.pickString("description", "synopsis", "overview")
-            )
-        }
-
-        fun walk(value: Any?) {
-            when (value) {
-                is JSONArray -> for (i in 0 until value.length()) walk(value.opt(i))
-                is JSONObject -> {
-                    parseObject(value)
-                    val keys = value.keys()
-                    while (keys.hasNext()) walk(value.opt(keys.next()))
-                }
-            }
-        }
-
-        runCatching {
-            when {
-                clean.startsWith("[") -> walk(JSONArray(clean))
-                clean.startsWith("{") -> walk(JSONObject(clean))
-            }
-        }
-        return results.values
-            .distinctBy { it.id }
-            .sortedBy { it.episode }
     }
 
     private fun JSONObject.pickString(vararg keys: String): String? {
