@@ -15,7 +15,7 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 class Rebahin : MainAPI() {
-    override var mainUrl = "https://windowsxpuser.com"
+    override var mainUrl = "https://rebahinxxi3.autos"
     override var name = "Rebahin"
     override val hasMainPage = true
     override val hasQuickSearch = true
@@ -23,40 +23,30 @@ class Rebahin : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
-    // Keep only one visible entry so Cloudstream opens a poster-based home screen,
-    // not a plain text catalog menu. The actual rows are built from source routes below.
-    override val mainPage = mainPageOf("/__home__" to "Rebahin")
+    // Single visible entry. The actual homepage rows are built below from the source routes,
+    // so Cloudstream renders poster rows instead of a plain text category catalog.
+    override val mainPage = mainPageOf("/" to "Featured")
 
     private data class HomeRoute(val title: String, val path: String)
 
     private val homeRoutes = listOf(
-        HomeRoute("Film Terbaru", "/"),
-        HomeRoute("Movie", "/category/movie/"),
-        HomeRoute("Serial TV", "/category/serial-tv/"),
-        HomeRoute("Anime", "/category/anime/"),
-        HomeRoute("Donghua", "/category/donghua/"),
-        HomeRoute("Animasi", "/category/animasi/"),
-        HomeRoute("Box Office", "/category/box-office/"),
-        HomeRoute("Action", "/category/action/"),
-        HomeRoute("Adventure", "/category/adventure/"),
-        HomeRoute("Comedy", "/category/comedy/"),
-        HomeRoute("Crime", "/category/crime/"),
-        HomeRoute("Drama", "/category/drama/"),
-        HomeRoute("Fantasy", "/category/fantasy/"),
-        HomeRoute("Mystery", "/category/mystery/"),
-        HomeRoute("Romance", "/category/romance/"),
-        HomeRoute("Science Fiction", "/category/science-fiction/"),
-        HomeRoute("Thriller", "/category/thriller/"),
-        HomeRoute("USA", "/country/usa/"),
-        HomeRoute("United Kingdom", "/country/united-kingdom/"),
-        HomeRoute("China", "/country/china/"),
-        HomeRoute("Korea", "/country/korea/"),
-        HomeRoute("Japan", "/country/japan/"),
-        HomeRoute("Taiwan", "/country/taiwan/"),
-        HomeRoute("Hong Kong", "/country/hong-kong/"),
-        HomeRoute("Thailand", "/country/thailand/"),
-        HomeRoute("Indonesia", "/country/indonesia/"),
-        HomeRoute("Philippines", "/country/philippines/")
+        HomeRoute("Featured", "/"),
+        HomeRoute("Film Terbaru", "/nonton-drama/"),
+        HomeRoute("Movie", "/movies/"),
+        HomeRoute("Serial TV", "/series/"),
+        HomeRoute("Populer", "/genre/populer/"),
+        HomeRoute("Romance", "/genre/romance/"),
+        HomeRoute("Drama", "/genre/drama/"),
+        HomeRoute("Action", "/genre/action/"),
+        HomeRoute("Sci-Fi", "/genre/sci-fi/"),
+        HomeRoute("Horror", "/genre/horror/"),
+        HomeRoute("Comedy", "/genre/comedy/"),
+        HomeRoute("Crime", "/genre/crime/"),
+        HomeRoute("Animation", "/genre/animation/"),
+        HomeRoute("Drama Korea", "/genre/drama-korea/"),
+        HomeRoute("Thailand Series", "/genre/thailand-series/"),
+        HomeRoute("China", "/genre/drama-china/"),
+        HomeRoute("Japan", "/genre/drama-jepang/")
     )
 
     private val headers = mapOf(
@@ -67,12 +57,12 @@ class Rebahin : MainAPI() {
     )
 
     private val mirrors = listOf(
-        "https://windowsxpuser.com",
         "https://rebahinxxi3.autos",
-        "https://rebahinxxi3.rest",
-        "https://rebahinxxi3.ink",
         "https://rebahinxxi3.com",
+        "https://rebahinxxi3.ink",
+        "https://rebahinxxi3.rest",
         "https://rebahinxxi3.cyou",
+        "https://windowsxpuser.com",
         "http://178.62.98.100"
     )
 
@@ -84,31 +74,47 @@ class Rebahin : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        // Home screen mode: build real poster rows, similar to the polished reference provider.
-        // This avoids Cloudstream showing only a plain text list of categories.
-        if (request.data == "/__home__") {
-            val rows = mutableListOf<HomePageList>()
+        val data = request.data.trim()
+        val isHome = data.isBlank() || data == "/" ||
+            data.equals("home", true) || data.equals("featured", true) ||
+            data.contains("__home__", true) || data.removeSuffix("/") == mainUrl.removeSuffix("/")
 
+        // Home mode: build several visual poster rows from the real source categories.
+        // If one route fails, keep the remaining rows alive instead of returning a black screen.
+        if (isHome && page <= 1) {
+            val rows = mutableListOf<HomePageList>()
             homeRoutes.forEach { route ->
                 val items = runCatching {
-                    parseSearchItems(fetchDocument(pagedUrl(route.path, page)))
+                    parseSearchItems(fetchDocument(route.path))
                         .distinctBy { it.url }
-                        .take(20)
+                        .take(24)
                 }.getOrDefault(emptyList())
 
-                if (items.isNotEmpty()) {
-                    rows.add(HomePageList(route.title, items))
-                }
+                if (items.isNotEmpty()) rows.add(HomePageList(route.title, items))
             }
 
-            return newHomePageResponse(rows, hasNext = false)
+            if (rows.isNotEmpty()) return newHomePageResponse(rows, hasNext = false)
+
+            // Last-resort fallback: parse the homepage once. This prevents a blank provider page
+            // when Cloudstream/source routing differs from the expected request data.
+            val fallback = runCatching {
+                parseSearchItems(fetchDocument("/"))
+                    .distinctBy { it.url }
+                    .take(40)
+            }.getOrDefault(emptyList())
+
+            return newHomePageResponse(
+                listOf(HomePageList("Film Terbaru", fallback)),
+                hasNext = fallback.isNotEmpty()
+            )
         }
 
-        val doc = fetchDocument(pagedUrl(request.data, page))
-        val items = parseSearchItems(doc)
+        val targetPath = if (isHome) "/" else data
+        val doc = fetchDocument(pagedUrl(targetPath, page))
+        val items = parseSearchItems(doc).distinctBy { it.url }
 
         return newHomePageResponse(
-            listOf(HomePageList(request.name, items)),
+            listOf(HomePageList(request.name.ifBlank { "Rebahin" }, items)),
             hasNext = items.isNotEmpty()
         )
     }
@@ -153,7 +159,7 @@ class Rebahin : MainAPI() {
             ?.cleanText()
             .orEmpty()
 
-        val tags = doc.select("a[href*=/category/], .sgeneros a, .genres a, .gmr-movie-genre a, a[rel=tag]")
+        val tags = doc.select("a[href*=/category/], a[href*=/genre/], .sgeneros a, .genres a, .gmr-movie-genre a, a[rel=tag]")
             .map { it.text().cleanText() }
             .filter { it.isNotBlank() && it.length <= 40 }
             .distinct()
@@ -386,24 +392,33 @@ class Rebahin : MainAPI() {
             ".result-item article",
             ".ml-item",
             ".movie",
+            ".movies .movie",
             ".item",
+            ".items .item",
             ".poster",
             ".post",
+            ".post-item",
             ".box-item",
             ".halim-item",
+            ".card",
+            ".gmr-movie-item",
+            ".gmr-item-modulepost",
+            ".pelicula",
             ".module .content .items > *",
             ".movies-list > *",
-            ".series-list > *"
+            ".series-list > *",
+            ".owl-item",
+            ".slider .item"
         ).joinToString(",")
 
         doc.select(selectors).forEach { element ->
             parseItem(element)?.let { item -> parsed.putIfAbsent(item.url, item) }
         }
 
-        if (parsed.isEmpty()) {
-            doc.select("h2 a[href], h3 a[href], h4 a[href]").forEach { anchor ->
-                parseItem(anchor.parent() ?: anchor)?.let { item -> parsed.putIfAbsent(item.url, item) }
-            }
+        // Fallback anchor scan. Rebahin often puts a Trailer button before the real Tonton Film
+        // button/title link, so the parser must walk all internal anchors and use nearby poster data.
+        doc.select("a[href]").forEach { anchor ->
+            parseAnchorItem(anchor)?.let { item -> parsed.putIfAbsent(item.url, item) }
         }
 
         return parsed.values.map { item ->
@@ -419,49 +434,55 @@ class Rebahin : MainAPI() {
     }
 
     private fun parseItem(element: Element): ParsedItem? {
-        // Dooplay/Rebahin cards usually place a YouTube trailer button before the real movie link.
-        // Selecting the first <a> blindly makes the parser discard the whole card, so always pick
-        // the first valid internal content URL instead.
         val anchor = element.select("h2 a[href], h3 a[href], h4 a[href], .title a[href], .data a[href], a[href]")
-            .firstOrNull { candidate ->
-                val href = normalizeUrl(candidate.attr("href"), mainUrl)
-                isValidContentUrl(href) &&
-                    !candidate.text().contains("Trailer", true) &&
-                    !href.contains("youtube", true)
-            } ?: return null
+            .firstOrNull { isRealContentAnchor(it) } ?: return null
+        return parseAnchorWithContainer(anchor, element)
+    }
 
+    private fun parseAnchorItem(anchor: Element): ParsedItem? {
+        if (!isRealContentAnchor(anchor)) return null
+        val container = listOfNotNull(
+            anchor.closest("article"),
+            anchor.closest(".item"),
+            anchor.closest(".movie"),
+            anchor.closest(".ml-item"),
+            anchor.closest(".post"),
+            anchor.closest(".post-item"),
+            anchor.closest(".box-item"),
+            anchor.closest(".card"),
+            anchor.closest(".gmr-movie-item"),
+            anchor.parent(),
+            anchor
+        ).first()
+        return parseAnchorWithContainer(anchor, container)
+    }
+
+    private fun parseAnchorWithContainer(anchor: Element, element: Element): ParsedItem? {
         val url = normalizeUrl(anchor.attr("href"), mainUrl)
         if (!isValidContentUrl(url)) return null
 
-        val titleAnchor = element.selectFirst("h1 a[href], h2 a[href], h3 a[href], h4 a[href], .title a[href], .data h2, .data h3")
+        val titleAnchor = element.selectFirst("h1 a[href], h2 a[href], h3 a[href], h4 a[href], .title a[href], .data h2, .data h3, .tt, .entry-title")
         val rawTitle = listOf(
             titleAnchor?.attr("title").orEmpty(),
             titleAnchor?.text().orEmpty(),
             anchor.attr("title"),
+            anchor.selectFirst("img[alt]")?.attr("alt").orEmpty(),
             element.selectFirst("img[alt]")?.attr("alt").orEmpty(),
-            anchor.text()
+            anchor.text(),
+            element.text().lineSequence().firstOrNull().orEmpty()
         ).firstOrNull { value ->
             val clean = value.cleanText()
             clean.length > 2 &&
                 !clean.equals("Tonton", true) &&
                 !clean.equals("Tonton Film", true) &&
-                !clean.equals("Trailer", true)
+                !clean.equals("Trailer", true) &&
+                !clean.equals("Lihat Semua", true)
         }.orEmpty()
 
         val title = cleanTitle(rawTitle)
-        if (title.length < 2) return null
+        if (title.length < 2 || isBadTitle(title)) return null
 
-        val poster = element.selectFirst("img[data-src], img[data-lazy-src], img[data-original], img[data-wpfc-original-src], img[src], source[srcset]")?.let { img ->
-            listOf("data-src", "data-lazy-src", "data-original", "data-wpfc-original-src", "src", "srcset")
-                .firstNotNullOfOrNull { attr ->
-                    img.attr(attr)
-                        .split(",")
-                        .firstOrNull()
-                        ?.substringBefore(" ")
-                        ?.takeIf { it.isNotBlank() }
-                }?.let { normalizeUrl(it, mainUrl) }
-        }
-
+        val poster = findImage(element) ?: findImage(anchor)
         val text = element.text()
         val type = if (text.contains("TV Show", true) ||
             text.contains("Serial TV", true) ||
@@ -471,6 +492,29 @@ class Rebahin : MainAPI() {
         ) TvType.TvSeries else TvType.Movie
 
         return ParsedItem(title, url, poster, type)
+    }
+
+    private fun isRealContentAnchor(anchor: Element): Boolean {
+        val href = normalizeUrl(anchor.attr("href"), mainUrl)
+        val text = anchor.text().cleanText()
+        return isValidContentUrl(href) &&
+            !href.contains("youtube", true) &&
+            !text.equals("Trailer", true) &&
+            !text.equals("Home", true) &&
+            !text.startsWith("Lihat Semua", true)
+    }
+
+    private fun findImage(element: Element): String? {
+        return element.selectFirst("img[data-src], img[data-lazy-src], img[data-original], img[data-wpfc-original-src], img[src], source[srcset]")?.let { img ->
+            listOf("data-src", "data-lazy-src", "data-original", "data-wpfc-original-src", "src", "srcset")
+                .firstNotNullOfOrNull { attr ->
+                    img.attr(attr)
+                        .split(",")
+                        .firstOrNull()
+                        ?.substringBefore(" ")
+                        ?.takeIf { it.isNotBlank() }
+                }?.let { normalizeUrl(it, mainUrl) }
+        }
     }
 
     private fun parseEpisodes(doc: Document): List<Episode> {
@@ -508,6 +552,12 @@ class Rebahin : MainAPI() {
     }
 
     private fun resolvePlayablePage(url: String, doc: Document): String {
+        // rebahinxxi3 often keeps the iframe/player on the detail page itself.
+        // windowsxpuser variants may use /play/. Start from detail when a player marker exists.
+        if (doc.selectFirst("iframe[src], video[src], source[src], [data-post][data-nume], .player, .player-area, #player") != null) {
+            return url
+        }
+
         doc.select("a[href*='/play/'], a[href*='?player='], a[href*='watch']").firstOrNull { a ->
             !a.text().contains("Trailer", true) && !a.attr("href").contains("youtube", true)
         }?.attr("href")?.let { return normalizeUrl(it, url) }
@@ -593,6 +643,8 @@ class Rebahin : MainAPI() {
     private fun isValidContentUrl(url: String): Boolean {
         if (!url.startsWith("http", true)) return false
         if (isBadLink(url)) return false
+        val path = pathOnly(url).lowercase().trimEnd('/') + "/"
+        if (path in setOf("/", "/movies/", "/series/", "/nonton-drama/", "/privacy/", "/dmca/", "/report/", "/pasang-iklan/")) return false
         return !listOf(
             "/category/", "/country/", "/year/", "/tag/", "/genre/", "/quality/",
             "/wp-content/", "/wp-json/", "/feed/", "/privacy", "/dmca", "/report", "/pasang-iklan"
@@ -602,6 +654,18 @@ class Rebahin : MainAPI() {
     private fun isValidCandidate(url: String): Boolean {
         if (url.isBlank() || isBadLink(url)) return false
         return url.startsWith("http", true) && !url.contains("/wp-content/uploads/", true)
+    }
+
+    private fun isBadTitle(title: String): Boolean {
+        val clean = title.cleanText()
+        return clean.length < 2 ||
+            clean.equals("Tonton Film", true) ||
+            clean.equals("Trailer", true) ||
+            clean.equals("Lihat Semua", true) ||
+            clean.equals("Home", true) ||
+            clean.equals("HD", true) ||
+            clean.equals("HDCAM", true) ||
+            clean.equals("HDTS", true)
     }
 
     private fun isBadLink(url: String): Boolean {

@@ -1,4 +1,4 @@
-version = 3
+version = 5
 
 cloudstream {
     language = "id"
@@ -8,5 +8,5 @@ cloudstream {
     status = 1
     tvTypes = listOf("Movie", "TvSeries")
 
-    iconUrl = "https://www.google.com/s2/favicons?domain=https://windowsxpuser.com&sz=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=https://rebahinxxi3.autos&sz=%size%"
 }
