@@ -101,7 +101,8 @@ class ReynimeProvider : MainAPI() {
         val genres: Set<String> = emptySet(),
         val description: String = "Streaming Donghua subtitle Indonesia di Reynime.",
         val featured: Boolean = false,
-        val updated: Boolean = false
+        val updated: Boolean = false,
+        val firstEpisode: Int = 1
     )
 
     private data class ApiEpisode(
@@ -154,11 +155,11 @@ class ReynimeProvider : MainAPI() {
     }
 
     private val sourceSeries = listOf(
-        SourceSeries(1, "Battle Through The Heavens Season 5", "battle-through-the-heaven-s5", "https://cdn.myanimelist.net/images/anime/1457/152289l.jpg", "Donghua", "Ongoing", TvType.Anime, 200, 2022, 9.20, setOf("action", "adventure", "fantasy", "martial-arts", "xuanhuan", "donghua"), "Season kelima dari Doupo Cangqiong.", true, true),
+        SourceSeries(1, "Battle Through The Heavens Season 5", "battle-through-the-heaven-s5", "https://cdn.myanimelist.net/images/anime/1457/152289l.jpg", "Donghua", "Ongoing", TvType.Anime, 200, 2022, 9.20, setOf("action", "adventure", "fantasy", "martial-arts", "xuanhuan", "donghua"), "Season kelima dari Doupo Cangqiong.", true, true, firstEpisode = 105),
         SourceSeries(11, "Renegade Immortal", "renegade-immortal", "https://cdn.myanimelist.net/images/anime/1289/149708l.jpg", "Donghua", "Ongoing", TvType.Anime, 142, 2023, 7.80, setOf("action", "adventure", "fantasy", "martial-arts", "xianxia", "donghua"), "Wang Lin menembus kurangnya bakat dan berjalan menuju jalan abadi sejati.", true, true),
         SourceSeries(29, "Tales of Herding Gods", "tales-of-herding-gods", "https://cdn.myanimelist.net/images/anime/1324/150012l.jpg", "Donghua", "Ongoing", TvType.Anime, 84, 2024, 8.80, setOf("action", "adventure", "fantasy", "martial-arts", "xianxia", "donghua"), "Qin Mu tumbuh di desa lansia penyandang cacat dan menghadapi bahaya Daxu.", true, true),
         SourceSeries(4, "Perfect World", "perfect-world", "https://cdn.myanimelist.net/images/anime/1809/153679l.jpg", "Donghua", "Ongoing", TvType.Anime, 200, 2021, 8.00, setOf("action", "adventure", "fantasy", "martial-arts", "xuanhuan", "donghua"), "Shi Hao, jenius yang diberkati langit, menempuh perjalanan untuk mengguncang dunia.", true, false),
-        SourceSeries(3, "Soul Land 2: The Peerless Tang Clan", "soul-land-2-the-peerless-tang-clan", "https://cdn.myanimelist.net/images/anime/1985/150594l.jpg", "Donghua", "Ongoing", TvType.Anime, 100, 2023, 8.40, setOf("action", "adventure", "fantasy", "martial-arts", "donghua"), "Generasi baru Shrek berusaha membangun kembali Tang Clan.", true, false),
+        SourceSeries(3, "Soul Land 2: The Peerless Tang Clan", "soul-land-2-the-peerless-tang-clan", "https://cdn.myanimelist.net/images/anime/1985/150594l.jpg", "Donghua", "Ongoing", TvType.Anime, 100, 2023, 8.40, setOf("action", "adventure", "fantasy", "martial-arts", "donghua"), "Generasi baru Shrek berusaha membangun kembali Tang Clan.", true, false, firstEpisode = 55),
 
         SourceSeries(26, "Martial Master", "martial-master", "https://cdn.myanimelist.net/images/anime/1738/107609l.jpg", "Donghua", "Ongoing", TvType.Anime, 660, 2020, 7.80, setOf("action", "fantasy", "martial-arts", "donghua"), updated = true),
         SourceSeries(84, "Sword and Fairy 3", "sword-and-fairy-3", "https://cdn.myanimelist.net/images/anime/1567/154040l.jpg", "Donghua", "Ongoing", TvType.Anime, 24, 2025, null, setOf("action", "adventure", "fantasy", "donghua"), updated = true),
@@ -427,7 +428,7 @@ class ReynimeProvider : MainAPI() {
             app.get(episodeListApi(seriesId), headers = apiHeaders(), referer = "$mainUrl/series/$seriesId", timeout = 12L).text
         }.getOrNull().orEmpty()
 
-        return parseApiEpisodeList(text)
+        return parseApiEpisodeList(text, expectedSeriesId = seriesId)
             .distinctBy { it.id }
             .sortedBy { it.episode }
             .map { item ->
@@ -475,7 +476,9 @@ class ReynimeProvider : MainAPI() {
 
     private fun fallbackEpisodes(pageUrl: String, seed: SourceSeries?, poster: String?, description: String?): List<Episode> {
         val latest = seed?.latestEpisode?.coerceAtLeast(1) ?: 1
-        return (1..latest).map { ep ->
+        val first = seed?.firstEpisode?.coerceAtLeast(1) ?: 1
+        val last = latest.coerceAtLeast(first)
+        return (first..last).map { ep ->
             val data = seed?.let { watchUrl(it, ep) } ?: "$pageUrl#episode-$ep"
             newEpisode(data) {
                 name = if (latest == 1 && seed?.type == TvType.AnimeMovie) "Movie" else "Episode $ep"
@@ -602,14 +605,21 @@ class ReynimeProvider : MainAPI() {
             return parseBackendEpisodeRecords(response.text)
         }
 
+        fun matchingSeries(records: List<BackendEpisodeRecord>): List<BackendEpisodeRecord> {
+            if (seriesId.isNullOrBlank()) return records
+            val exact = records.filter { it.seriesId == seriesId }
+            if (exact.isNotEmpty()) return exact
+            return records.filter { it.seriesId.isNullOrBlank() }
+        }
+
         episodeId?.let { id ->
-            probe("$mainUrl/backend/api/episodes.php?id=$id&_t=${System.currentTimeMillis()}").forEach { record ->
+            matchingSeries(probe("$mainUrl/backend/api/episodes.php?id=$id&_t=${System.currentTimeMillis()}")).forEach { record ->
                 record.urls.forEach(urls::add)
             }
         }
 
         if (!seriesId.isNullOrBlank()) {
-            val records = probe("$mainUrl/backend/api/episodes.php?series_id=$seriesId&limit=1000&_t=${System.currentTimeMillis()}")
+            val records = matchingSeries(probe("$mainUrl/backend/api/episodes.php?series_id=$seriesId&limit=1000&_t=${System.currentTimeMillis()}"))
             val selected = records.filter { record ->
                 episodeNumber.isNullOrBlank() || record.episodeNumber == episodeNumber
             }
@@ -625,7 +635,7 @@ class ReynimeProvider : MainAPI() {
                     "$mainUrl/backend/api/watch.php?series_id=$seriesId&episode=$episodeNumber&_t=${System.currentTimeMillis()}",
                     "$mainUrl/backend/api/stream.php?series_id=$seriesId&episode=$episodeNumber&_t=${System.currentTimeMillis()}"
                 ).forEach { exactUrl ->
-                    probe(exactUrl).forEach { record ->
+                    matchingSeries(probe(exactUrl)).forEach { record ->
                         record.urls.forEach(urls::add)
                         record.id?.let(idsToProbe::add)
                     }
@@ -635,7 +645,7 @@ class ReynimeProvider : MainAPI() {
 
         episodeId?.let { idsToProbe.remove(it) }
         idsToProbe.take(4).forEach { id ->
-            probe("$mainUrl/backend/api/episodes.php?id=$id&_t=${System.currentTimeMillis()}").forEach { record ->
+            matchingSeries(probe("$mainUrl/backend/api/episodes.php?id=$id&_t=${System.currentTimeMillis()}")).forEach { record ->
                 record.urls.forEach(urls::add)
             }
         }
@@ -769,12 +779,16 @@ class ReynimeProvider : MainAPI() {
         return results.values.toList()
     }
 
-    private fun parseApiEpisodeList(text: String): List<ApiEpisode> {
+    private fun parseApiEpisodeList(text: String, expectedSeriesId: Int? = null): List<ApiEpisode> {
         val clean = text.cleanEscaped().trim()
         if (clean.isBlank() || !(clean.startsWith("[") || clean.startsWith("{"))) return emptyList()
         val results = linkedMapOf<Int, ApiEpisode>()
+        val responseHasSeriesScope = Regex("""[\"'](?:series_id|seriesId|anime_id|animeId)[\"']\s*:""", RegexOption.IGNORE_CASE).containsMatchIn(clean)
 
         fun parseObject(obj: JSONObject) {
+            val recordSeriesId = obj.pickInt("series_id", "seriesId", "anime_id", "animeId")
+            if (expectedSeriesId != null && responseHasSeriesScope && recordSeriesId != expectedSeriesId) return
+
             val title = obj.pickString("title", "name", "episode_title", "label", "judul")
             val explicitEpisode = obj.pickInt("episode", "episode_number", "episodeNumber", "number", "ep", "eps")
             val labelEpisode = extractEpisodeNumber(title.orEmpty(), obj.toString())
@@ -783,7 +797,7 @@ class ReynimeProvider : MainAPI() {
             if (!obj.looksLikeEpisodeObject() && explicitEpisode == null && labelEpisode == null && !hasPlayable) return
 
             val id = obj.pickInt("episode_id", "episodeId", "watch_id", "pid", "post_id")
-                ?: obj.pickInt("id")?.takeIf { obj.looksLikeEpisodeObject() || explicitEpisode != null || labelEpisode != null }
+                ?: obj.pickInt("id")?.takeIf { obj.looksLikeEpisodeObject() || explicitEpisode != null || labelEpisode != null || hasPlayable }
                 ?: return
 
             val ep = explicitEpisode ?: labelEpisode ?: results.size + 1
