@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
+
 class OploverzProvider : MainAPI() {
     override var mainUrl = "https://anime.oploverz.ac"
     private val backAPI = "https://backapi.oploverz.ac"
@@ -31,7 +32,7 @@ class OploverzProvider : MainAPI() {
                 else -> TvType.Anime
             }
         }
-
+        
         var context: android.content.Context? = null
 
         fun getStatus(t: String?): ShowStatus {
@@ -43,66 +44,17 @@ class OploverzProvider : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "api/episodes?sort=latest" to "Rilis Terbaru",
-        "api/series?sort=popular" to "Terpopuler",
-        "api/series?sort=rating" to "Rating Tertinggi",
-        "api/series?genres=action" to "Action",
-        "api/series?genres=adventure" to "Adventure",
-        "api/series?genres=comedy" to "Comedy",
-        "api/series?genres=drama" to "Drama",
-        "api/series?genres=ecchi" to "Ecchi",
-        "api/series?genres=fantasy" to "Fantasy",
-        "api/series?genres=harem" to "Harem",
-        "api/series?genres=historical" to "Historical",
-        "api/series?genres=isekai" to "Isekai",
-        "api/series?genres=josei" to "Josei",
-        "api/series?genres=magic" to "Magic",
-        "api/series?genres=martial-arts" to "Martial Arts",
-        "api/series?genres=mecha" to "Mecha",
-        "api/series?genres=military" to "Military",
-        "api/series?genres=music" to "Music",
-        "api/series?genres=mystery" to "Mystery",
-        "api/series?genres=psychological" to "Psychological",
-        "api/series?genres=romance" to "Romance",
-        "api/series?genres=school" to "School",
-        "api/series?genres=sci-fi" to "Sci-Fi",
-        "api/series?genres=seinen" to "Seinen",
-        "api/series?genres=shoujo" to "Shoujo",
-        "api/series?genres=shounen" to "Shounen",
-        "api/series?genres=slice-of-life" to "Slice of Life",
-        "api/series?genres=space" to "Space",
-        "api/series?genres=sports" to "Sports",
-        "api/series?genres=super-power" to "Super Power",
-        "api/series?genres=supernatural" to "Supernatural",
-        "api/series?genres=thriller" to "Thriller"
+        "latest" to "Rilis Terbaru",
     )
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = "$backAPI/${request.data}&page=$page&pageSize=24"
-        val isSeries = request.data.startsWith("api/series")
-
-        val home = if (isSeries) {
-            app.get(url).parsedSafe<SearchAnime>()?.data?.map {
-                newAnimeSearchResponse(
-                    it.title ?: "",
-                    "$mainUrl/series/${it.slug}",
-                    TvType.Anime
-                ) {
-                    this.otherName = it.japaneseTitle
-                    this.posterUrl = it.poster
-                    this.score = Score.from10(it.score)
-                    addSub(it.totalEpisodes)
-                }
-            }
-        } else {
-            app.get(url).parsedSafe<Anime>()?.data?.map {
+        val home = app.get("$backAPI/api/episodes?page=$page&pageSize=24&sort=${request.data}")
+            .parsedSafe<Anime>()?.data?.map {
                 it.toSearchResult()
-            }
-        } ?: throw ErrorLoadingException()
-
+            } ?: throw ErrorLoadingException()
         return newHomePageResponse(
             request.name,
             home
@@ -183,6 +135,7 @@ class OploverzProvider : MainAPI() {
             addMalId(tracker?.malId)
             addAniListId(tracker?.aniId?.toIntOrNull())
         }
+
     }
 
     override suspend fun loadLinks(
@@ -191,6 +144,7 @@ class OploverzProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+
         val doc = app.get(data).document
 
         doc.select("div.flex.flex-row.items-start").amap { selector ->
@@ -230,7 +184,7 @@ class OploverzProvider : MainAPI() {
         }
     }
 
-    private fun getQuality(quality: String): Int {
+    private fun getQuality(quality: String) : Int {
         return when {
             quality.equals("Mini", false) -> Qualities.P480.value
             quality.equals("HD", false) -> Qualities.P720.value
@@ -271,4 +225,5 @@ class OploverzProvider : MainAPI() {
         @JsonProperty("score") val score: Int? = null,
         @JsonProperty("totalEpisodes") val totalEpisodes: Int? = null,
     )
+
 }
