@@ -49,34 +49,16 @@ class ReynimeProvider : MainAPI() {
         TvType.OVA
     )
 
-    // Route ini mengikuti URL sumber yang terlihat di situs/index: /browse, /browse?sort=updated,
-    // /browse?status=Completed, /jadwal, /series/{id}, dan /watch/{id}.
+    // Kategori dibuat dari struktur sumber yang terlihat langsung di halaman Reynime:
+    // Featured, Update Terbaru, Ongoing Series, Completed Series, dan filter All/Anime/Donghua.
     override val mainPage = mainPageOf(
+        "home:featured" to "Featured",
         "browse?sort=updated" to "Update Terbaru",
         "browse" to "Daftar Donghua",
-        "browse?sort=popular" to "Populer",
-        "browse?sort=latest" to "Terbaru Ditambahkan",
-        "browse?status=Ongoing" to "Ongoing",
-        "browse?status=Completed" to "Completed",
-        "browse?type=Movie" to "Movie",
-        "browse?type=OVA" to "OVA",
-        "browse?genre=Action" to "Action",
-        "browse?genre=Adventure" to "Adventure",
-        "browse?genre=Comedy" to "Comedy",
-        "browse?genre=Drama" to "Drama",
-        "browse?genre=Fantasy" to "Fantasy",
-        "browse?genre=Martial%20Arts" to "Martial Arts",
-        "browse?genre=Romance" to "Romance",
-        "browse?genre=Mystery" to "Mystery",
-        "browse?genre=Sci-Fi" to "Sci-Fi",
-        "browse?genre=Supernatural" to "Supernatural",
-        "browse?genre=Thriller" to "Thriller",
-        "browse?genre=Historical" to "Historical",
-        "browse?genre=Isekai" to "Isekai",
-        "browse?genre=Xianxia" to "Xianxia",
-        "browse?genre=Xuanhuan" to "Xuanhuan",
-        "browse?genre=Wuxia" to "Wuxia",
-        "browse?genre=Donghua" to "Donghua"
+        "browse?status=Ongoing" to "Ongoing Series",
+        "browse?status=Completed" to "Completed Series",
+        "browse?type=Anime" to "Anime",
+        "browse?type=Donghua" to "Donghua"
     )
 
     private val headers = mapOf(
@@ -91,51 +73,76 @@ class ReynimeProvider : MainAPI() {
         val title: String,
         val slug: String,
         val status: String = "Ongoing",
+        val mediaKind: String = "Donghua",
         val type: TvType = TvType.Anime,
         val genres: Set<String> = emptySet(),
         val latestEpisode: Int = 1,
-        val poster: String? = null
+        val poster: String,
+        val score: String? = null,
+        val description: String? = null,
+        val featured: Boolean = false
     )
 
-    // Fallback terakhir saja. Data ini tidak dipakai sebelum API/HTML source dicoba.
+    // Source-backed fallback dari daftar yang terlihat langsung di halaman Reynime.
+    // Ini dipakai hanya ketika halaman/API sumber kosong karena SPA/client-side render atau request diblokir.
     private val seedSeries = listOf(
-        SeedSeries(1, "Battle Through the Heaven S5", "battle-through-the-heaven-s5", "Ongoing", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xuanhuan", "donghua"), 170),
-        SeedSeries(4, "Perfect World", "perfect-world", "Ongoing", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xuanhuan", "donghua"), 172),
-        SeedSeries(6, "Throne of Seal", "throne-of-seal", "Ongoing", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "donghua"), 119),
-        SeedSeries(29, "Tales of Herding Gods", "tales-of-herding-gods", "Ongoing", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xianxia", "donghua"), 76),
-        SeedSeries(33, "Sword of Coming", "sword-of-coming", "Completed", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "wuxia", "donghua"), 26),
-        SeedSeries(64, "Throne of Ten Thousand Swords", "throne-of-ten-thousand-swords", "Ongoing", TvType.Anime, setOf("action", "fantasy", "martial arts", "wuxia", "donghua"), 30),
-        SeedSeries(72, "Ascendants of the Nine Suns", "ascendants-of-the-nine-suns", "Ongoing", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "donghua"), 22),
-        SeedSeries(83, "Beyond Time's Gaze", "beyond-times-gaze", "Ongoing", TvType.Anime, setOf("fantasy", "romance", "mystery", "supernatural", "donghua"), 16),
-        SeedSeries(87, "Way of Choices", "way-of-choices", "Completed", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "romance", "donghua"), 12),
-        SeedSeries(119, "Shrouding the Heavens", "shrouding-the-heavens", "Ongoing", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xianxia", "donghua"), 155),
-        SeedSeries(130, "Renegade Immortal", "renegade-immortal", "Ongoing", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xianxia", "donghua"), 134),
-        SeedSeries(140, "Swallowed Star 4th Season", "swallowed-star-4th-season", "Ongoing", TvType.Anime, setOf("action", "adventure", "sci-fi", "donghua"), 217)
+        SeedSeries(1, "Battle Through The Heavens Season 5", "battle-through-the-heavens-season-5", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xuanhuan", "donghua"), 200, "https://cdn.myanimelist.net/images/anime/1457/152289l.jpg", "9.20", "Season kelima dari Doupo Cangqiong.", true),
+        SeedSeries(11, "Renegade Immortal", "renegade-immortal", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xianxia", "donghua"), 142, "https://cdn.myanimelist.net/images/anime/1289/149708l.jpg", "7.80", "Wang Lin berjalan di jalan menuju menjadi abadi nyata.", true),
+        SeedSeries(29, "Tales of Herding Gods", "tales-of-herding-gods", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xianxia", "donghua"), 84, "https://cdn.myanimelist.net/images/anime/1324/150012l.jpg", "8.80", "Qin Mu tumbuh di desa para lansia penyandang cacat dan menghadapi bahaya Daxu.", true),
+        SeedSeries(4, "Perfect World", "perfect-world", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "xuanhuan", "donghua"), 200, "https://cdn.myanimelist.net/images/anime/1809/153679l.jpg", "8.00", "Shi Hao, jenius yang diberkati langit, menempuh perjalanan untuk mengguncang dunia.", true),
+        SeedSeries(3, "Soul Land 2: The Peerless Tang Clan", "soul-land-2-the-peerless-tang-clan", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "martial arts", "donghua"), 100, "https://cdn.myanimelist.net/images/anime/1985/150594l.jpg", "8.40", "Generasi baru Shrek berusaha membangun kembali Tang Clan.", true),
+
+        SeedSeries(26, "Martial Master", "martial-master", "Ongoing", "Donghua", TvType.Anime, setOf("action", "fantasy", "martial arts", "donghua"), 660, "https://cdn.myanimelist.net/images/anime/1738/107609l.jpg", "7.80"),
+        SeedSeries(84, "Sword and Fairy 3", "sword-and-fairy-3", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "donghua"), 24, "https://cdn.myanimelist.net/images/anime/1567/154040l.jpg"),
+        SeedSeries(24, "Peerless Battle Spirit", "peerless-battle-spirit", "Ongoing", "Donghua", TvType.Anime, setOf("action", "fantasy", "martial arts", "donghua"), 179, "https://cdn.myanimelist.net/images/anime/1290/150120l.jpg", "7.80"),
+        SeedSeries(12, "Swallowed Star 4th Season", "swallowed-star-4th-season", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "sci-fi", "donghua"), 225, "https://cdn.myanimelist.net/images/anime/1335/138907l.jpg", "7.80"),
+        SeedSeries(136, "Walking the Way All Alone", "walking-the-way-all-alone", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "donghua"), 9, "https://myanimelist.net/images/anime/1648/156622l.jpg"),
+        SeedSeries(139, "Stellar Transformation 7th Season", "stellar-transformation-7th-season", "Completed", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "donghua"), 12, "https://myanimelist.net/images/anime/1147/156957l.jpg"),
+        SeedSeries(83, "Beyond Time's Gaze", "beyond-times-gaze", "Ongoing", "Donghua", TvType.Anime, setOf("fantasy", "romance", "mystery", "supernatural", "donghua"), 23, "https://cdn.myanimelist.net/images/anime/1628/153418l.jpg"),
+
+        SeedSeries(138, "Coiling Dragon", "coiling-dragon", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "donghua"), 6, "https://myanimelist.net/images/anime/1578/156842.jpg"),
+        SeedSeries(137, "Ever Night", "ever-night", "Ongoing", "Donghua", TvType.Anime, setOf("action", "adventure", "fantasy", "donghua"), 6, "https://myanimelist.net/images/anime/1021/156293l.jpg"),
+        SeedSeries(120, "Against the Gods 2nd Season", "against-the-gods-2nd-season", "Ongoing", "Donghua", TvType.Anime, setOf("action", "fantasy", "martial arts", "donghua"), 38, "https://myanimelist.net/images/anime/1125/156004l.jpg"),
+        SeedSeries(118, "In Search of Gods", "in-search-of-gods", "Ongoing", "Donghua", TvType.Anime, setOf("action", "fantasy", "donghua"), 11, "https://myanimelist.net/images/anime/1433/156264l.jpg"),
+        SeedSeries(116, "Azure Legacy 3", "azure-legacy-3", "Ongoing", "Donghua", TvType.Anime, setOf("action", "fantasy", "donghua"), 78, "https://myanimelist.net/images/anime/1742/153462l.jpg"),
+        SeedSeries(115, "Maou no Musume wa Yasashisugiru!!", "maou-no-musume-wa-yasashisugiru", "Ongoing", "Anime", TvType.Anime, setOf("comedy", "fantasy", "anime"), 10, "https://myanimelist.net/images/anime/1160/154083l.jpg"),
+        SeedSeries(114, "Yuusha Party ni Kawaii Ko ga Ita node, Kokuhaku shitemita.", "yuusha-party-ni-kawaii-ko-ga-ita-node-kokuhaku-shitemita", "Ongoing", "Anime", TvType.Anime, setOf("comedy", "fantasy", "romance", "anime"), 9, "https://myanimelist.net/images/anime/1573/152828l.jpg"),
+        SeedSeries(113, "Mayonaka Heart Tune", "mayonaka-heart-tune", "Ongoing", "Anime", TvType.Anime, setOf("comedy", "romance", "anime"), 9, "https://myanimelist.net/images/anime/1769/152823l.jpg"),
+        SeedSeries(112, "Isekai no Sata wa Shachiku Shidai", "isekai-no-sata-wa-shachiku-shidai", "Ongoing", "Anime", TvType.Anime, setOf("fantasy", "isekai", "anime"), 9, "https://myanimelist.net/images/anime/1510/153806l.jpg"),
+
+        SeedSeries(119, "Shrouding the Heavens: The Imperial Path", "shrouding-the-heavens-the-imperial-path", "Completed", "Donghua", TvType.AnimeMovie, setOf("action", "adventure", "fantasy", "martial arts", "xianxia", "donghua"), 1, "https://myanimelist.net/images/anime/1017/156548l.jpg"),
+        SeedSeries(74, "Long Hun", "long-hun", "Completed", "Donghua", TvType.Anime, setOf("action", "fantasy", "donghua"), 8, "https://cdn.myanimelist.net/images/anime/1878/153807l.jpg", "8.50"),
+        SeedSeries(71, "Wu Dong Qian Kun 6th Season", "wu-dong-qian-kun-6th-season", "Completed", "Donghua", TvType.Anime, setOf("action", "fantasy", "martial arts", "donghua"), 12, "https://cdn.myanimelist.net/images/anime/1937/151456l.jpg", "9.00"),
+        SeedSeries(70, "Back as Immortal Lord", "back-as-immortal-lord", "Completed", "Donghua", TvType.Anime, setOf("action", "fantasy", "donghua"), 16, "https://cdn.myanimelist.net/images/anime/1109/153446l.jpg"),
+        SeedSeries(68, "Eternal Sword Emperor", "eternal-sword-emperor", "Completed", "Donghua", TvType.Anime, setOf("action", "fantasy", "martial arts", "donghua"), 40, "https://cdn.myanimelist.net/images/anime/1794/151549l.jpg", "7.80"),
+        SeedSeries(65, "Legend of the Misty Sword Immortal", "legend-of-the-misty-sword-immortal", "Completed", "Donghua", TvType.Anime, setOf("action", "fantasy", "martial arts", "donghua"), 40, "https://cdn.myanimelist.net/images/anime/1600/151290l.jpg", "7.50"),
+        SeedSeries(64, "Throne of Ten Thousand Swords", "throne-of-ten-thousand-swords", "Completed", "Donghua", TvType.Anime, setOf("action", "fantasy", "martial arts", "wuxia", "donghua"), 40, "https://cdn.myanimelist.net/images/anime/1098/151287l.webp", "7.80"),
+        SeedSeries(63, "Long March to the Stars", "long-march-to-the-stars", "Completed", "Donghua", TvType.Anime, setOf("action", "adventure", "sci-fi", "donghua"), 4, "https://cdn.myanimelist.net/images/anime/1273/151289l.jpg", "8.20"),
+        SeedSeries(62, "Zi Chuan 2nd Season", "zi-chuan-2nd-season", "Completed", "Donghua", TvType.Anime, setOf("action", "fantasy", "donghua"), 43, "https://cdn.myanimelist.net/images/anime/1186/151163l.jpg", "8.20")
     )
 
-    private fun seedUrl(seed: SeedSeries): String = "$mainUrl/series/${seed.id}/${seed.slug}"
-
-    private fun placeholderPoster(title: String): String {
-        val encoded = URLEncoder.encode(title.take(42), "UTF-8").replace("+", "%20")
-        return "https://dummyimage.com/300x450/111827/ffffff.jpg&text=$encoded"
-    }
+    private fun seedUrl(seed: SeedSeries): String = "$mainUrl/series/${seed.id}"
 
     private fun SeedSeries.toSeedSearchResponse(): SearchResponse {
         return newAnimeSearchResponse(title, seedUrl(this), type) {
-            posterUrl = poster ?: placeholderPoster(title)
+            posterUrl = this@toSeedSearchResponse.poster
+            score = this@toSeedSearchResponse.score?.toDoubleOrNull()?.let { com.lagradost.cloudstream3.Score.from10(it) }
+            addSub(this@toSeedSearchResponse.latestEpisode)
         }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val items = fetchCatalog(request.data, page)
-            .ifEmpty { fallbackItemsFor(request.data) }
+        val fetched = fetchCatalog(request.data, page)
+            .distinctBy { it.url }
+            .filter { it.name.isNotBlank() && !isBadTitle(it.name) }
+        val items = fetched.ifEmpty { fallbackItemsFor(request.data) }
             .distinctBy { it.url }
             .filter { it.name.isNotBlank() && !isBadTitle(it.name) }
 
         return newHomePageResponse(
             request.name,
             items,
-            hasNext = items.isNotEmpty() && page < 10
+            hasNext = fetched.isNotEmpty() && page < 10
         )
     }
 
@@ -159,6 +166,7 @@ class ReynimeProvider : MainAPI() {
 
     private fun buildSourceCandidates(data: String, page: Int): List<String> {
         val clean = data.trim('/').trim()
+        if (clean.startsWith("home:")) return listOf(mainUrl)
         val query = clean.substringAfter("?", "")
         val apiQuery = when {
             query.isNotBlank() -> query
@@ -199,17 +207,24 @@ class ReynimeProvider : MainAPI() {
 
     private fun fallbackItemsFor(data: String): List<SearchResponse> {
         val clean = data.lowercase()
-        val queryValue = clean.substringAfter("=", "").replace("%20", " ").replace("+", " ")
+        val queryValue = runCatching {
+            URLDecoder.decode(clean.substringAfter("=", ""), "UTF-8")
+        }.getOrDefault(clean.substringAfter("=", "")).lowercase()
+
         val filtered = when {
+            clean.contains("home:featured") -> seedSeries.filter { it.featured }
+            clean.contains("sort=updated") -> seedSeries.filter { it.id in setOf(26, 84, 24, 12, 136, 11, 29, 139, 83, 1) }
             clean.contains("status=ongoing") -> seedSeries.filter { it.status.equals("Ongoing", true) }
             clean.contains("status=completed") -> seedSeries.filter { it.status.equals("Completed", true) }
+            clean.contains("type=anime") -> seedSeries.filter { it.mediaKind.equals("Anime", true) }
+            clean.contains("type=donghua") || clean == "browse" -> seedSeries.filter { it.mediaKind.equals("Donghua", true) }
             clean.contains("type=movie") -> seedSeries.filter { it.type == TvType.AnimeMovie }
             clean.contains("type=ova") -> seedSeries.filter { it.type == TvType.OVA }
             clean.contains("genre=") -> seedSeries.filter { queryValue in it.genres.map { genre -> genre.lowercase() } }
-            clean.contains("sort=popular") -> seedSeries.take(10)
+            clean.contains("sort=popular") -> seedSeries.filter { it.featured }.ifEmpty { seedSeries.take(10) }
             else -> seedSeries
         }
-        return (if (filtered.isNotEmpty()) filtered else seedSeries.take(8)).map { it.toSeedSearchResponse() }
+        return (if (filtered.isNotEmpty()) filtered else seedSeries.take(10)).map { it.toSeedSearchResponse() }
     }
 
     private fun parseApiCards(text: String, baseUrl: String): List<SearchResponse> {
@@ -356,11 +371,11 @@ class ReynimeProvider : MainAPI() {
         val document = response.document
         val html = response.text.cleanEscaped()
         val title = listOf(
+            seed?.title,
             extractJsonString(html, "title"),
             extractJsonString(html, "name"),
             document.selectFirst("meta[property=og:title]")?.attr("content"),
             document.selectFirst("h1, .text-2xl, .text-3xl, .font-bold, .font-semibold")?.text(),
-            seed?.title,
             pageUrl.substringAfterLast("/").replace("-", " ")
         ).firstOrNull { !it.isNullOrBlank() && !isBadTitle(it) }?.cleanTitle() ?: name
 
@@ -371,15 +386,18 @@ class ReynimeProvider : MainAPI() {
             document.selectFirst("meta[property=og:image]")?.attr("content"),
             document.selectFirst("img[alt*='$title'], img.h-full, img.w-full, .poster img, .cover img, img")?.getImageAttr(),
             seed?.poster
-        ).firstOrNull { !it.isNullOrBlank() }?.let { normalizeUrl(it, pageUrl) } ?: placeholderPoster(title)
+        ).firstOrNull { !it.isNullOrBlank() }?.let { normalizeUrl(it, pageUrl) }
+            ?: seed?.poster
+            ?: "https://cdn.myanimelist.net/images/anime/1457/152289l.jpg"
 
         val description = listOf(
+            seed?.description,
             extractJsonString(html, "description"),
             extractJsonString(html, "synopsis"),
             extractJsonString(html, "overview"),
             document.selectFirst("meta[name=description]")?.attr("content"),
             document.selectFirst(".synopsis, .description, .desc, article p, main p")?.text()
-        ).firstOrNull { !it.isNullOrBlank() && it.length > 20 }?.cleanTitle()
+        ).firstOrNull { !it.isNullOrBlank() && it.length > 20 && !isBadTitle(it) }?.cleanTitle()
 
         val tags = document.select("a[href*='genre'], a[href*='tag'], .genre a, .genres a, .tags a")
             .map { it.text().trim() }
@@ -403,7 +421,7 @@ class ReynimeProvider : MainAPI() {
 
     private suspend fun fallbackLoad(url: String, seed: SeedSeries? = findSeedFromUrl(url)): LoadResponse {
         val title = seed?.title ?: url.substringAfterLast("/").replace("-", " ").cleanTitle().ifBlank { name }
-        val poster = seed?.poster ?: placeholderPoster(title)
+        val poster = seed?.poster ?: "https://cdn.myanimelist.net/images/anime/1457/152289l.jpg"
         val episodes = fallbackEpisodes(seed?.let { seedUrl(it) } ?: url, seed, title, poster, "Streaming Donghua subtitle Indonesia di Reynime.")
         return newAnimeLoadResponse(title, seed?.let { seedUrl(it) } ?: url, seed?.type ?: TvType.Anime) {
             engName = title
