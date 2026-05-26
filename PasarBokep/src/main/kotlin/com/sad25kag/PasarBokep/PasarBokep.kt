@@ -57,7 +57,6 @@ class PasarBokep : MainAPI() {
         TvType.NSFW
     )
 
-    // Source menu is mixed, so the home page is intentionally reduced to country/region rows only.
     override val mainPage = mainPageOf(
         "category/bokep-indo/" to "Indonesia",
         "category/bokep-korea/" to "Korea",
@@ -603,7 +602,23 @@ class PasarBokep : MainAPI() {
 
         if (text.isBlank()) return emptyList()
 
-        return extractPlayableUrls(text) + extractBase64Payloads(text).flatMap { extractPlayableUrls(it) }
+        // Ekstrak URL standar dan base64
+        val baseUrls = extractPlayableUrls(text) + extractBase64Payloads(text).flatMap { extractPlayableUrls(it) }
+
+        // FIX: Otomatis parse JSON API dari custom player (seperti majorplay/jeniusplay)
+        val jsonUrls = Regex("""https?://[^"'\\\s<>]+?\.json(?:\?[^"'\\\s<>]*)?""", RegexOption.IGNORE_CASE)
+            .findAll(text)
+            .map { it.value }
+            .toList()
+
+        val jsonExtracted = jsonUrls.flatMap { jsonUrl ->
+            runCatching {
+                val jsonResp = app.get(jsonUrl, headers = jsonHeaders, referer = url).text.cleanEscaped()
+                extractPlayableUrls(jsonResp)
+            }.getOrDefault(emptyList())
+        }
+
+        return baseUrls + jsonExtracted
     }
 
     private fun addCandidate(
@@ -648,6 +663,13 @@ class PasarBokep : MainAPI() {
                 }
             ) {
                 this.referer = referer
+                // FIX: Penambahan Header mutlak agar terhindar dari error blokir CORS saat playback
+                this.headers = mapOf(
+                    "Origin" to "https://${hostOf(referer).ifBlank { hostOf(mainUrl) }}",
+                    "Referer" to referer,
+                    "User-Agent" to USER_AGENT,
+                    "Accept" to "*/*"
+                )
                 this.quality = getQualityFromName(link).takeIf {
                     it != Qualities.Unknown.value
                 } ?: qualityFromUrl(link)
@@ -840,15 +862,13 @@ class PasarBokep : MainAPI() {
     }
 
     private fun isDirectVideoUrl(url: String): Boolean {
-        val value = url.lowercase()
-        val host = hostOf(url)
-
+        val value = url.lowercase().substringBefore("?")
+        
         return isHlsLike(url) ||
-            value.contains(".mp4") ||
-            value.contains(".webm") ||
-            value.contains(".mkv") ||
-            (host.contains("googlevideo.com") && (value.contains("videoplayback") || value.contains("mime=video"))) ||
-            value.contains("/videoplayback?")
+            value.endsWith(".mp4") ||
+            value.endsWith(".webm") ||
+            value.endsWith(".mkv") ||
+            (url.contains("googlevideo.com", ignoreCase = true) && url.contains("videoplayback", ignoreCase = true))
     }
 
     private fun normalizeUrl(
@@ -996,15 +1016,13 @@ class PasarBokep : MainAPI() {
     }
 
     private fun isHlsLike(url: String): Boolean {
-        val value = url.lowercase()
-
-        return value.contains(".m3u8") ||
-            value.contains("/manifest/hls_playlist") ||
-            (
-                value.contains("majorplay") &&
-                    value.contains("config") &&
-                    value.contains(".json")
-                )
+        // Abaikan parameter query untuk mengecek ektensi asli
+        val value = url.lowercase().substringBefore("?")
+        
+        return value.endsWith(".m3u8") ||
+            value.endsWith(".m3u") ||
+            url.contains("/manifest/hls_playlist", ignoreCase = true) ||
+            url.contains("m3u8", ignoreCase = true)
     }
 
     private fun isAdUrl(url: String): Boolean {
