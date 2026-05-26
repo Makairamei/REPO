@@ -15,7 +15,6 @@ import kotlinx.coroutines.runBlocking
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
-
 class OtakudesuProvider : MainAPI() {
     override var mainUrl = "https://otakudesu.best"
     override var name = "Otakudesu🧶"
@@ -55,8 +54,46 @@ class OtakudesuProvider : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
+        // Kategori Utama
         "$mainUrl/ongoing-anime/page/" to "Anime Ongoing",
-        "$mainUrl/complete-anime/page/" to "Anime Completed"
+        "$mainUrl/complete-anime/page/" to "Anime Completed",
+        
+        // Kategori Genre
+        "$mainUrl/genres/action/page/" to "Action",
+        "$mainUrl/genres/adventure/page/" to "Adventure",
+        "$mainUrl/genres/comedy/page/" to "Comedy",
+        "$mainUrl/genres/demons/page/" to "Demons",
+        "$mainUrl/genres/drama/page/" to "Drama",
+        "$mainUrl/genres/ecchi/page/" to "Ecchi",
+        "$mainUrl/genres/fantasy/page/" to "Fantasy",
+        "$mainUrl/genres/game/page/" to "Game",
+        "$mainUrl/genres/harem/page/" to "Harem",
+        "$mainUrl/genres/historical/page/" to "Historical",
+        "$mainUrl/genres/horror/page/" to "Horror",
+        "$mainUrl/genres/isekai/page/" to "Isekai",
+        "$mainUrl/genres/josei/page/" to "Josei",
+        "$mainUrl/genres/magic/page/" to "Magic",
+        "$mainUrl/genres/martial-arts/page/" to "Martial Arts",
+        "$mainUrl/genres/mecha/page/" to "Mecha",
+        "$mainUrl/genres/military/page/" to "Military",
+        "$mainUrl/genres/music/page/" to "Music",
+        "$mainUrl/genres/mystery/page/" to "Mystery",
+        "$mainUrl/genres/psychological/page/" to "Psychological",
+        "$mainUrl/genres/romance/page/" to "Romance",
+        "$mainUrl/genres/samurai/page/" to "Samurai",
+        "$mainUrl/genres/school/page/" to "School",
+        "$mainUrl/genres/sci-fi/page/" to "Sci-Fi",
+        "$mainUrl/genres/seinen/page/" to "Seinen",
+        "$mainUrl/genres/shoujo/page/" to "Shoujo",
+        "$mainUrl/genres/shoujo-ai/page/" to "Shoujo Ai",
+        "$mainUrl/genres/shounen/page/" to "Shounen",
+        "$mainUrl/genres/slice-of-life/page/" to "Slice of Life",
+        "$mainUrl/genres/space/page/" to "Space",
+        "$mainUrl/genres/sports/page/" to "Sports",
+        "$mainUrl/genres/super-power/page/" to "Super Power",
+        "$mainUrl/genres/supernatural/page/" to "Supernatural",
+        "$mainUrl/genres/thriller/page/" to "Thriller",
+        "$mainUrl/genres/vampire/page/" to "Vampire"
     )
 
     override suspend fun getMainPage(
@@ -64,41 +101,42 @@ class OtakudesuProvider : MainAPI() {
         request: MainPageRequest
     ): HomePageResponse {
         val document = app.get(request.data + page).document
-        val home = document.select("div.venz > ul > li").mapNotNull {
+        // Menggunakan multiple CSS selectors untuk membaca Layout Ongoing/Completed (div.venz) maupun Layout Genre (ul.chivsrc)
+        val home = document.select("div.venz > ul > li, ul.chivsrc > li").mapNotNull {
             it.toSearchResult()
         }
         return newHomePageResponse(request.name, home)
     }
 
     private fun Element.toSearchResult(): AnimeSearchResponse? {
-        val title = this.selectFirst("h2.jdlflm")?.text()?.trim() ?: return null
-        val href = this.selectFirst("a")!!.attr("href")
-        val posterUrl = this.select("div.thumbz > img").attr("src").toString()
-        val epNum = this.selectFirst("div.epz")?.ownText()?.replace(Regex("\\D"), "")?.trim()
-            ?.toIntOrNull()
+        // Menyesuaikan pencarian Title & URL agar bisa membaca struktur Venz dan Chivsrc sekaligus
+        val titleElement = this.selectFirst("h2.jdlflm, h2 > a") ?: return null
+        val title = titleElement.text().trim()
+        val href = this.selectFirst("a")?.attr("href") ?: return null
+        val posterUrl = this.selectFirst("div.thumbz > img, img")?.attr("src")?.toString()
+        val epNum = this.selectFirst("div.epz")?.ownText()?.replace(Regex("\\D"), "")?.trim()?.toIntOrNull()
+
         return newAnimeSearchResponse(title, href, TvType.Anime) {
             this.posterUrl = posterUrl
             addSub(epNum)
         }
-
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-    val url = "$mainUrl/?s=$query&post_type=anime"
-    val document = app.get(url).document
+        val url = "$mainUrl/?s=$query&post_type=anime"
+        val document = app.get(url).document
 
-    return document.select("ul.chivsrc > li").mapNotNull { li ->
-        val titleElement = li.selectFirst("h2 > a") ?: return@mapNotNull null
-        val title = titleElement.ownText().trim()
-        val href = fixUrl(titleElement.attr("href"))
-        val posterUrl = li.selectFirst("img")?.attr("src")
+        return document.select("ul.chivsrc > li").mapNotNull { li ->
+            val titleElement = li.selectFirst("h2 > a") ?: return@mapNotNull null
+            val title = titleElement.ownText().trim()
+            val href = fixUrl(titleElement.attr("href"))
+            val posterUrl = li.selectFirst("img")?.attr("src")
 
-        newAnimeSearchResponse(title, href, TvType.Anime) {
-            this.posterUrl = posterUrl
+            newAnimeSearchResponse(title, href, TvType.Anime) {
+                this.posterUrl = posterUrl
+            }
         }
     }
-}
-
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
@@ -169,78 +207,77 @@ class OtakudesuProvider : MainAPI() {
     )
 
     override suspend fun loadLinks(
-    data: String,
-    isCasting: Boolean,
-    subtitleCallback: (SubtitleFile) -> Unit,
-    callback: (ExtractorLink) -> Unit
-): Boolean {
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
 
-    val document = app.get(data).document
+        val document = app.get(data).document
 
-    // ====== BLOK 1 ======
-    try {
-        val scriptData = document.select("script:containsData(action:)").lastOrNull()?.data()
-        val token = scriptData?.substringAfter("{action:\"")?.substringBefore("\"}").toString()
+        // ====== BLOK 1 ======
+        try {
+            val scriptData = document.select("script:containsData(action:)").lastOrNull()?.data()
+            val token = scriptData?.substringAfter("{action:\"")?.substringBefore("\"}").toString()
 
-        val nonce = app.post(
-            "$mainUrl/wp-admin/admin-ajax.php",
-            data = mapOf("action" to token)
-        ).parsed<ResponseData>().data
+            val nonce = app.post(
+                "$mainUrl/wp-admin/admin-ajax.php",
+                data = mapOf("action" to token)
+            ).parsed<ResponseData>().data
 
-        val action = scriptData?.substringAfter(",action:\"")?.substringBefore("\"}").toString()
+            val action = scriptData?.substringAfter(",action:\"")?.substringBefore("\"}").toString()
 
-        val mirrorData = document.select("div.mirrorstream > ul > li").mapNotNull {
-            base64Decode(it.select("a").attr("data-content"))
-        }.toString()
+            val mirrorData = document.select("div.mirrorstream > ul > li").mapNotNull {
+                base64Decode(it.select("a").attr("data-content"))
+            }.toString()
 
-        tryParseJson<List<ResponseSources>>(mirrorData)?.forEach { res ->
-            val id = res.id
-            val i = res.i
-            val q = res.q
+            tryParseJson<List<ResponseSources>>(mirrorData)?.forEach { res ->
+                val id = res.id
+                val i = res.i
+                val q = res.q
 
-            val sources = Jsoup.parse(
-                base64Decode(
-                    app.post(
-                        "$mainUrl/wp-admin/admin-ajax.php",
-                        data = mapOf(
-                            "id" to id,
-                            "i" to i,
-                            "q" to q,
-                            "nonce" to nonce,
-                            "action" to action
-                        )
-                    ).parsed<ResponseData>().data
+                val sources = Jsoup.parse(
+                    base64Decode(
+                        app.post(
+                            "$mainUrl/wp-admin/admin-ajax.php",
+                            data = mapOf(
+                                "id" to id,
+                                "i" to i,
+                                "q" to q,
+                                "nonce" to nonce,
+                                "action" to action
+                            )
+                        ).parsed<ResponseData>().data
+                    )
+                ).select("iframe").attr("src")
+
+                loadCustomExtractor(sources, data, subtitleCallback, callback, getQuality(q))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // ====== BLOK 2 ======
+        document.select("div.download li").forEach { ele ->
+            val quality = getQuality(ele.select("strong").text())
+            ele.select("a").map {
+                it.attr("href") to it.text()
+            }.filter {
+                !inBlacklist(it.first) && quality != Qualities.P360.value
+            }.forEach {
+                val link = app.get(it.first, referer = "$mainUrl/").url
+                loadCustomExtractor(
+                    fixedIframe(link),
+                    data,
+                    subtitleCallback,
+                    callback,
+                    quality
                 )
-            ).select("iframe").attr("src")
-
-            loadCustomExtractor(sources, data, subtitleCallback, callback, getQuality(q))
+            }
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
+
+        return true
     }
-
-    // ====== BLOK 2 ======
-    document.select("div.download li").forEach { ele ->
-        val quality = getQuality(ele.select("strong").text())
-        ele.select("a").map {
-            it.attr("href") to it.text()
-        }.filter {
-            !inBlacklist(it.first) && quality != Qualities.P360.value
-        }.forEach {
-            val link = app.get(it.first, referer = "$mainUrl/").url
-            loadCustomExtractor(
-                fixedIframe(link),
-                data,
-                subtitleCallback,
-                callback,
-                quality
-            )
-        }
-    }
-
-    return true
-}
-
 
     private suspend fun loadCustomExtractor(
         url: String,
@@ -287,7 +324,6 @@ class OtakudesuProvider : MainAPI() {
         return Regex("(\\d{3,4})[pP]").find(str ?: "")?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: Qualities.Unknown.value
     }
-
 }
 
 class Moedesu : JWPlayer() {
