@@ -1,10 +1,12 @@
 package com.gomunime
 
 import com.gomunime.GomunimeUtils.absoluteUrl
+import com.gomunime.GomunimeUtils.cleanAnimeTitle
 import com.gomunime.GomunimeUtils.cleanText
 import com.gomunime.GomunimeUtils.episodeNumber
 import com.gomunime.GomunimeUtils.isAnimeDetailUrl
 import com.gomunime.GomunimeUtils.statusFromText
+import com.gomunime.GomunimeUtils.titleFromSlug
 import com.gomunime.GomunimeUtils.typeFromText
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.AnimeSearchResponse
@@ -23,67 +25,53 @@ import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 object GomunimeParser {
     fun parseListing(api: MainAPI, document: Document): List<SearchResponse> {
-        val cards = document.select(
-            "article.bs, article, .anime-card, .anime-item, .series-card, .post, .card, .grid > div, .swiper-slide, .listupd .bs"
-        ).mapNotNull { parseCard(api, it) }
+        val cards = linkedSetOf<AnimeSearchResponse>()
 
-        val fallback = document.select("a[href]")
-            .mapNotNull { parseAnchorCard(api, it) }
+        document.select(
+            "article.bs, .listupd article, .listupd .bs, .episode-card, .anime-card, .series-card, .grid a[href], .swiper-slide a[href], a[href*='-episode-']"
+        ).forEach { element ->
+            parseCard(api, element)?.let { cards.add(it) }
+        }
 
-        return (cards + fallback)
+        if (cards.size < 8) {
+            document.select("a[href]").forEach { anchor ->
+                parseAnchorCard(api, anchor)?.let { cards.add(it) }
+            }
+        }
+
+        return cards
             .distinctBy { it.url }
             .filter { it.name.length > 2 }
             .take(48)
     }
 
     private fun parseCard(api: MainAPI, element: Element): AnimeSearchResponse? {
-        val link = element.selectFirst("a[href*='${api.mainUrl}'], a[href^='/'], a[href]")
-            ?: return null
+        val link = if (element.`is`("a[href]")) element else element.selectFirst("a[href*='-episode-'], a[href]")
+        link ?: return null
 
         val href = absoluteUrl(api.mainUrl, link.attr("href")) ?: return null
         if (!isAnimeDetailUrl(href)) return null
 
-        val image = element.selectFirst("img")
-        val title = cleanText(
-            element.selectFirst(".tt h3, .tt h2, h3, h2, .title, .name, .anime-title")?.text()
-                ?: link.attr("title")
-                ?: image?.attr("alt")
-                ?: link.text()
-        ).removePrefix("Tonton ").trim()
+        val container = nearestUsefulContainer(element)
+        val image = container.selectFirst("img") ?: link.selectFirst("img")
+        val rawTitle = container.selectFirst(".tt h3, .tt h2, h3, h2, .title, .name, .anime-title")?.text()
+            ?: link.attr("title")
+            ?: image?.attr("alt")
+            ?: link.text()
+            ?: titleFromSlug(href)
 
-        if (title.isBlank() || title.equals("GOMU NIME", true)) return null
-        if (title.length < 3 || title.contains("episode baru", true)) return null
+        val title = cleanAnimeTitle(rawTitle, href)
+        if (!isValidTitle(title)) return null
 
-        val poster = image?.let {
-            absoluteUrl(
-                api.mainUrl,
-                it.attr("data-src").ifBlank {
-                    it.attr("data-original").ifBlank {
-                        it.attr("src")
-                    }
-                }
-            )
-        }
-
-        val typeText = cleanText(
-            element.selectFirst(".type, .typez, .type-label, .meta")?.text()
-                ?: element.text()
-        )
-
-        val epNum = cleanText(
-            element.selectFirst(".epx, .episode, .ep, .eps, .badge")?.text()
-                ?: element.text()
-        ).let { episodeNumber(it) }
-
+        val poster = findPoster(api.mainUrl, container, image)
+        val typeText = cleanText(container.selectFirst(".type, .typez, .type-label, .meta")?.text() ?: container.text())
         val type = typeFromText(typeText)
 
         return api.newAnimeSearchResponse(title, href, if (type == TvType.AnimeMovie) TvType.AnimeMovie else TvType.Anime) {
-            this.posterUrl = poster
+            posterUrl = poster
         }
     }
 
@@ -91,25 +79,17 @@ object GomunimeParser {
         val href = absoluteUrl(api.mainUrl, anchor.attr("href")) ?: return null
         if (!isAnimeDetailUrl(href)) return null
 
-        val raw = cleanText(anchor.text()).removePrefix("Tonton ").trim()
-        if (raw.isBlank()) return null
-        if (raw.length < 3) return null
-        if (raw.equals("Home", true) || raw.equals("Info", true) || raw.equals("Play", true)) return null
-        if (raw.contains("Episode", true) && !raw.contains("Tonton", true)) return null
+        val text = cleanText(anchor.text())
+        val image = anchor.selectFirst("img") ?: anchor.parent()?.selectFirst("img")
+        val hasItemSignal = href.contains("-episode-", true) || text.contains("Tonton", true) || text.contains("Episode", true) || text.contains("★") || image != null
+        if (!hasItemSignal) return null
 
-        val title = raw
-            .replace(Regex("""^★\s*[\d.]+\s*"""), "")
-            .replace(Regex("""\s+TV\s*•.*$"""), "")
-            .replace(Regex("""\s+Movie\s*•.*$"""), "")
-            .replace(Regex("""\s+OVA\s*•.*$"""), "")
-            .replace(Regex("""\s+ONA\s*•.*$"""), "")
-            .trim()
+        val title = cleanAnimeTitle(text.ifBlank { image?.attr("alt") }, href)
+        if (!isValidTitle(title)) return null
 
-        if (title.isBlank() || title.length < 3) return null
-
-        return api.newAnimeSearchResponse(title, href, typeFromText(raw)) {
-            // Episode counters are intentionally not set here because the target Cloudstream API
-            // used by this repo no longer exposes addSub() in AnimeSearchResponse builders.
+        val poster = findPoster(api.mainUrl, anchor.parent() ?: anchor, image)
+        return api.newAnimeSearchResponse(title, href, typeFromText(text)) {
+            posterUrl = poster
         }
     }
 
@@ -118,10 +98,9 @@ object GomunimeParser {
             return parseEpisodeAsSingleLoad(api, url, document)
         }
 
-        val title = cleanText(
-            document.selectFirst("h1.entry-title, h1, .anime-title, .title")?.text()
-                ?: document.selectFirst("meta[property=og:title]")?.attr("content")
-        ).removePrefix("Anime ").removeSuffix(" Sub Indo HD").trim().ifBlank { return null }
+        val rawTitle = document.selectFirst("h1.entry-title, h1, .anime-title, .title")?.text()
+            ?: document.selectFirst("meta[property=og:title]")?.attr("content")
+        val title = cleanAnimeTitle(rawTitle, url).ifBlank { return null }
 
         val bodyText = cleanText(document.body()?.text())
         val poster = absoluteUrl(
@@ -136,7 +115,6 @@ object GomunimeParser {
             ?: document.selectFirst(".status, .info:contains(Status)")?.text()
 
         val typeText = Regex("""(?i)\b(TV|Movie|OVA|ONA|Special)\b""").find(bodyText)?.groupValues?.getOrNull(1)
-            ?: bodyText
 
         val year = document.selectFirst("a[href*='/year/']")?.text()?.toIntOrNull()
             ?: Regex("""\b(19|20)\d{2}\b""").find(bodyText)?.value?.toIntOrNull()
@@ -148,7 +126,7 @@ object GomunimeParser {
         )
 
         val tags = document.select("a[href*='/genre/'], a[href*='/genres/']")
-            .map { cleanText(it.text()) }
+            .map { cleanText(it.text()).substringBefore("(").trim() }
             .filter { it.length in 2..40 }
             .distinct()
             .take(16)
@@ -166,7 +144,7 @@ object GomunimeParser {
             this.year = year
             this.tags = tags
             this.plot = description
-            showStatus = statusFromText(statusText)
+            statusFromText(statusText)?.let { showStatus = it }
             addEpisodes(DubStatus.Subbed, episodes)
             addMalId(tracker?.malId)
             addAniListId(tracker?.aniId?.toIntOrNull())
@@ -180,22 +158,16 @@ object GomunimeParser {
                 ?: document.selectFirst("meta[property=og:title]")?.attr("content")
         ).ifBlank { return null }
 
-        val baseTitle = pageTitle.substringBefore(" Episode").trim()
-        val animeTitle = document.select("a[href]")
-            .map { cleanText(it.text()) }
-            .firstOrNull { it.isNotBlank() && baseTitle.contains(it, ignoreCase = true) }
-            ?: baseTitle.ifBlank { pageTitle }
-
-        val episode = episodeNumber(pageTitle)
+        val episode = episodeNumber(pageTitle) ?: episodeNumber(url)
+        val rawAnimeTitle = pageTitle.substringBefore(" Episode").substringBefore(" episode")
+        val animeTitle = cleanAnimeTitle(rawAnimeTitle, url).ifBlank { titleFromSlug(url) }
         val poster = absoluteUrl(api.mainUrl, document.selectFirst("meta[property=og:image]")?.attr("content"))
-        val typeText = cleanText(document.body()?.text())
-        val type = typeFromText(typeText)
+        val type = typeFromText(pageTitle)
 
         return api.newAnimeLoadResponse(animeTitle, url, type) {
             engName = animeTitle
             posterUrl = poster
             plot = cleanText(document.selectFirst("meta[name=description]")?.attr("content"))
-            showStatus = statusFromText(typeText)
             addEpisodes(
                 DubStatus.Subbed,
                 listOf(
@@ -224,7 +196,7 @@ object GomunimeParser {
                 this.name = "Episode ${epNum ?: text}".trim()
                 this.episode = epNum
             }
-        }.sortedByDescending { it.episode ?: 0 }
+        }
 
         return episodes.ifEmpty {
             val epNum = episodeNumber(fallbackUrl)
@@ -247,6 +219,47 @@ object GomunimeParser {
 
     private fun isEpisodePage(document: Document, url: String): Boolean {
         val title = cleanText(document.selectFirst("h1, .entry-title")?.text())
-        return url.contains("-episode-", true) || title.contains(" Episode ", true) || document.select("select.mirror option, .mirror option").isNotEmpty()
+        val hasEpisodeSlug = Regex("""(?i)-episode-\d+""").containsMatchIn(url)
+        val hasEpisodeTitle = Regex("""(?i)\bepisode\s+\d+\b""").containsMatchIn(title)
+        val hasPlayerSignal = document.select(
+            "select.mirror option, .mirror option, #player, #player-div, .player-embed, .anime_video_body iframe, iframe[src*='drive'], iframe[src*='gdrive'], iframe[src*='btube']"
+        ).isNotEmpty()
+        return hasEpisodeSlug || hasEpisodeTitle || (hasPlayerSignal && hasEpisodeTitle)
+    }
+
+    private fun nearestUsefulContainer(element: Element): Element {
+        return element.closest("article, .bs, .anime-card, .episode-card, .series-card, .card, .swiper-slide, li") ?: element
+    }
+
+    private fun findPoster(mainUrl: String, container: Element, image: Element?): String? {
+        val img = image ?: container.selectFirst("img")
+        val fromImg = img?.let {
+            absoluteUrl(
+                mainUrl,
+                it.attr("data-src").ifBlank {
+                    it.attr("data-original").ifBlank {
+                        it.attr("data-lazy-src").ifBlank { it.attr("src") }
+                    }
+                }
+            )
+        }
+        if (!fromImg.isNullOrBlank()) return fromImg
+
+        val style = container.attr("style") + " " + container.select("[style]").joinToString(" ") { it.attr("style") }
+        return Regex("""url\((['\"]?)(.*?)\1\)""", RegexOption.IGNORE_CASE)
+            .find(style)
+            ?.groupValues
+            ?.getOrNull(2)
+            ?.let { absoluteUrl(mainUrl, it) }
+    }
+
+    private fun isValidTitle(title: String): Boolean {
+        if (title.isBlank() || title.length < 3) return false
+        val lower = title.lowercase()
+        if (lower in setOf("home", "info", "play", "genre", "download app", "lihat semua", "semua")) return false
+        if (lower.contains("gomu nime")) return false
+        if (lower.contains("update tiap hari")) return false
+        if (lower.matches(Regex("^[0-9]+$"))) return false
+        return true
     }
 }
