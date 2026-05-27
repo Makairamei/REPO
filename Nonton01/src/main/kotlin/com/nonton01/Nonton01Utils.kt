@@ -7,11 +7,13 @@ import java.net.URLEncoder
 object Nonton01Utils {
     const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Mobile Safari/537.36"
 
-    val siteHeaders = mapOf(
+    val siteHeaders = siteHeadersFor(Nonton01Seeds.MAIN_URL)
+
+    fun siteHeadersFor(referer: String? = Nonton01Seeds.MAIN_URL): Map<String, String> = mapOf(
         "User-Agent" to USER_AGENT,
         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer" to "${Nonton01Seeds.MAIN_URL}/"
+        "Referer" to "${(originOf(referer) ?: Nonton01Seeds.MAIN_URL).trimEnd('/')}/"
     )
 
     fun videoHeaders(referer: String): Map<String, String> = mapOf(
@@ -121,8 +123,28 @@ object Nonton01Utils {
     }
 
     fun isSameHost(url: String): Boolean {
-        val host = runCatching { URI(url).host.orEmpty().lowercase() }.getOrDefault("")
-        return host == "91.208.197.221" || host.endsWith("01nonton.com") || host.endsWith("nonton01.com") || host.endsWith("01nonton.top") || host.endsWith("01nonton.site")
+        val host = runCatching { URI(url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
+        if (host.isBlank()) return false
+        return Nonton01Seeds.KNOWN_HOSTS.any { known ->
+            val normalized = known.lowercase().removePrefix("www.")
+            host == normalized || host.endsWith(".$normalized")
+        }
+    }
+
+    fun mirrorUrlsFor(url: String): List<String> {
+        val currentOrigin = originOf(url) ?: return Nonton01Seeds.MIRROR_URLS.map { base ->
+            base.trimEnd('/') + "/" + url.trimStart('/')
+        }.distinct()
+        val pathAndQuery = runCatching {
+            val uri = URI(url)
+            val path = uri.rawPath.orEmpty().ifBlank { "/" }
+            val query = uri.rawQuery?.let { "?$it" }.orEmpty()
+            path + query
+        }.getOrDefault("/")
+        return (listOf(currentOrigin) + Nonton01Seeds.MIRROR_URLS)
+            .distinct()
+            .map { it.trimEnd('/') + pathAndQuery }
+            .distinct()
     }
 
     fun isCatalogUrl(url: String): Boolean {

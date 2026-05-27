@@ -2,6 +2,30 @@ package com.nonton01
 
 object Nonton01Seeds {
     const val MAIN_URL = "https://91.208.197.221"
+    const val PUBLIC_URL = "https://01nonton.com"
+
+    /**
+     * Mirror candidates are intentionally centralized here so runtime fixes do not
+     * require parser/extractor rewrites when the IP or public domain changes.
+     */
+    val MIRROR_URLS = listOf(
+        MAIN_URL,
+        PUBLIC_URL,
+        "https://www.01nonton.com",
+        "https://nonton01.com"
+    )
+
+    val KNOWN_HOSTS = setOf(
+        "91.208.197.221",
+        "01nonton.com",
+        "www.01nonton.com",
+        "nonton01.com",
+        "www.nonton01.com",
+        "01nonton.top",
+        "www.01nonton.top",
+        "01nonton.site",
+        "www.01nonton.site"
+    )
 
     /**
      * Data memakai prefix paths: agar satu row bisa mencoba beberapa struktur permalink.

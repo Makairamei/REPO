@@ -24,7 +24,7 @@ object Nonton01Extractor {
     private const val MAX_HOPS = 3
     private const val MAX_DIRECT_CANDIDATES = 26
     private const val MAX_EMBED_CANDIDATES = 14
-    private const val MAX_AJAX_CANDIDATES = 18
+    private const val MAX_AJAX_CANDIDATES = 12
 
     private val keyValueRegex = Regex(
         """(?i)(?:file|src|url|source|hls|hlsUrl|video|videoUrl|stream|streamUrl|playlist|embed|iframe|link|player|content)
@@ -41,6 +41,7 @@ object Nonton01Extractor {
     private val dataNumeRegex = Regex("""(?i)data-(?:nume|server|episode)\s*=\s*['\"]?(\d+)""")
     private val dataTypeRegex = Regex("""(?i)data-type\s*=\s*['\"]?([a-zA-Z0-9_-]+)""")
     private val jsPostRegex = Regex("""(?i)(?:post|post_id|movie_id|id)\s*[:=]\s*['\"]?(\d+)""")
+    private val bodyPostRegex = Regex("""(?i)(?:postid-|post-|wp-post-)(\d{2,})""")
 
     private val serverAttributes = listOf(
         "src", "href", "value", "data-src", "data-url", "data-link", "data-href",
@@ -58,9 +59,12 @@ object Nonton01Extractor {
     ): Boolean {
         Log.e(TAG, "loadLinks start: $data")
         val emitted = linkedSetOf<String>()
-        val found = resolvePage(providerName, data, data, mainUrl, 0, emitted, subtitleCallback, callback)
-        if (!found) Log.e(TAG, "loadLinks no playable links for: $data")
-        return found
+        for (candidate in Nonton01Utils.mirrorUrlsFor(data)) {
+            val found = resolvePage(providerName, candidate, candidate, mainUrl, 0, emitted, subtitleCallback, callback)
+            if (found) return true
+        }
+        Log.e(TAG, "loadLinks no playable links for: $data")
+        return false
     }
 
     private suspend fun resolvePage(
@@ -79,7 +83,7 @@ object Nonton01Extractor {
         }
 
         val response = runCatching {
-            app.get(pageUrl, headers = Nonton01Utils.siteHeaders, referer = referer)
+            app.get(pageUrl, headers = Nonton01Utils.siteHeadersFor(referer), referer = referer)
         }.onFailure { Log.e(TAG, "GET failed $pageUrl: ${it.message}") }.getOrNull() ?: return false
         val document = response.document
 
@@ -216,6 +220,7 @@ object Nonton01Extractor {
         dataNumeRegex.findAll(html).map { it.groupValues[1] }.forEach { numes.add(it) }
         dataTypeRegex.findAll(html).map { it.groupValues[1] }.forEach { types.add(it) }
         jsPostRegex.findAll(html).map { it.groupValues[1] }.take(3).forEach { posts.add(it) }
+        bodyPostRegex.findAll(html).map { it.groupValues[1] }.take(4).forEach { posts.add(it) }
 
         if (posts.isEmpty()) return emptyList()
         if (numes.isEmpty()) (1..8).map { it.toString() }.forEach { numes.add(it) }
@@ -240,29 +245,40 @@ object Nonton01Extractor {
             for (endpoint in endpoints) {
                 if (attempts >= MAX_AJAX_CANDIDATES) break
                 attempts++
-                val form = "action=doo_player_ajax&post=$post&nume=$nume&type=$type"
-                Log.e(TAG, "ajax probe: $endpoint post=$post nume=$nume type=$type")
-                val responseText = runCatching {
-                    val body = form.toRequestBody("application/x-www-form-urlencoded; charset=UTF-8".toMediaTypeOrNull())
-                    app.post(
-                        endpoint,
-                        requestBody = body,
-                        headers = Nonton01Utils.siteHeaders + mapOf(
-                            "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                            "Referer" to pageUrl
-                        )
-                    ).text
-                }.getOrNull() ?: runCatching {
-                    app.get("$endpoint?$form", headers = Nonton01Utils.siteHeaders + mapOf("Referer" to pageUrl)).text
-                }.getOrNull()
+                val actions = listOf("doo_player_ajax", "dt_player_ajax", "player_ajax")
+                for (action in actions) {
+                    val form = "action=$action&post=$post&nume=$nume&type=$type"
+                    Log.e(TAG, "ajax probe: $endpoint action=$action post=$post nume=$nume type=$type")
+                    val responseText = runCatching {
+                        val body = form.toRequestBody("application/x-www-form-urlencoded; charset=UTF-8".toMediaTypeOrNull())
+                        app.post(
+                            endpoint,
+                            requestBody = body,
+                            headers = Nonton01Utils.siteHeadersFor(pageUrl) + mapOf(
+                                "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                                "Referer" to pageUrl,
+                                "X-Requested-With" to "XMLHttpRequest"
+                            )
+                        ).text
+                    }.getOrNull() ?: runCatching {
+                        app.get(
+                            "$endpoint?$form",
+                            headers = Nonton01Utils.siteHeadersFor(pageUrl) + mapOf(
+                                "Referer" to pageUrl,
+                                "X-Requested-With" to "XMLHttpRequest"
+                            )
+                        ).text
+                    }.getOrNull()
 
-                if (!responseText.isNullOrBlank()) {
-                    extractUrlsFromText(pageUrl, ajaxPayloadText(responseText)).forEach { out.add(it) }
-                    if (out.isNotEmpty()) Log.e(TAG, "ajax captured ${out.size} candidates from $endpoint")
+                    if (!responseText.isNullOrBlank()) {
+                        extractUrlsFromText(pageUrl, ajaxPayloadText(responseText)).forEach { out.add(it) }
+                        if (out.isNotEmpty()) Log.e(TAG, "ajax captured ${out.size} candidates from $endpoint action=$action")
+                    }
+                    if (out.any { looksLikeHls(it) || looksLikeDirectMp4(it) || isKnownExtractorHost(it.lowercase()) || looksLikeEmbed(it) }) break
                 }
-                if (out.any { looksLikeHls(it) || looksLikeDirectMp4(it) || isKnownExtractorHost(it.lowercase()) }) break
+                if (out.any { looksLikeHls(it) || looksLikeDirectMp4(it) || isKnownExtractorHost(it.lowercase()) || looksLikeEmbed(it) }) break
             }
-            if (out.any { looksLikeHls(it) || looksLikeDirectMp4(it) || isKnownExtractorHost(it.lowercase()) }) break
+            if (out.any { looksLikeHls(it) || looksLikeDirectMp4(it) || isKnownExtractorHost(it.lowercase()) || looksLikeEmbed(it) }) break
         }
         return out.toList()
     }
@@ -318,9 +334,19 @@ object Nonton01Extractor {
 
     private fun extractAttributeUrls(pageUrl: String, document: Document): List<String> {
         val out = linkedSetOf<String>()
-        document.select("iframe, embed, video, source, option, a[href], button, div, span, li").forEach { element ->
+        document.select("iframe, embed, video, source, option, a[href], button, div, span, li, script").forEach { element ->
             serverAttributes.forEach { attr ->
-                normalizeUrl(pageUrl, element.attr(attr))?.let { out.add(it) }
+                val raw = element.attr(attr)
+                normalizeUrl(pageUrl, raw)?.let { out.add(it) }
+                if (raw.contains("http", ignoreCase = true) ||
+                    raw.contains("iframe", ignoreCase = true) ||
+                    raw.contains("&lt;", ignoreCase = true) ||
+                    raw.contains("\\/")) {
+                    extractUrlsFromText(pageUrl, raw).forEach { out.add(it) }
+                }
+            }
+            if (element.tagName().equals("script", ignoreCase = true)) {
+                extractUrlsFromText(pageUrl, element.data()).forEach { out.add(it) }
             }
         }
         return out.distinct()
@@ -330,10 +356,14 @@ object Nonton01Extractor {
 
     private fun normalizedText(text: String): String = text
         .replace("\\/", "/")
+        .replace("\\\"", "\"")
+        .replace("\\'", "'")
         .replace("&amp;", "&")
         .replace("&#038;", "&")
         .replace("&quot;", "\"")
         .replace("&#039;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
         .replace("\\u0026", "&")
         .replace("\\u003d", "=")
         .replace("\\u003a", ":")

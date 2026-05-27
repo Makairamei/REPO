@@ -81,10 +81,7 @@ object Nonton01Parser {
     }
 
     suspend fun parseLoadResponse(api: MainAPI, url: String, document: Document): LoadResponse? {
-        val title = cleanTitle(
-            document.selectFirst("h1.entry-title, h1, .title, .heading")?.text()
-                ?: document.selectFirst("meta[property=og:title]")?.attr("content")
-        ).ifBlank { return null }
+        val title = extractDetailTitle(document, url) ?: return null
 
         val contentRoot = document.selectFirst("article, .entry-content, .single, .post, main") ?: document
         val poster = extractDetailPoster(api.mainUrl, title, document)
@@ -297,6 +294,69 @@ object Nonton01Parser {
         return candidates.asSequence()
             .mapNotNull { absoluteUrl(baseUrl, it)?.let { poster -> upscalePosterUrl(poster) } }
             .firstOrNull { isValidPoster(it) }
+    }
+
+    private fun extractDetailTitle(document: Document, url: String): String? {
+        val descriptionTitle = document.selectFirst("meta[property=og:description], meta[name=description]")
+            ?.attr("content")
+            ?.let { text ->
+                Regex("""(?i)\bnonton\s+(.+?)\s+(?:streaming|subtitle|sub\b|film\b|movie\b|online\b|gratis\b)""")
+                    .find(text)
+                    ?.groupValues
+                    ?.getOrNull(1)
+            }
+
+        val candidates = listOfNotNull(
+            descriptionTitle,
+            document.selectFirst("meta[property=og:title]")?.attr("content"),
+            document.selectFirst("meta[name=twitter:title]")?.attr("content"),
+            document.selectFirst("meta[name=title]")?.attr("content"),
+            document.title(),
+            document.selectFirst("h1.entry-title, h1.post-title, .single-title h1, .entry-header h1")?.text(),
+            document.selectFirst("h1")?.text(),
+            titleFromUrl(url)
+        )
+
+        return candidates
+            .asSequence()
+            .map { cleanDetailTitle(it) }
+            .firstOrNull { title ->
+                title.length >= 3 &&
+                    !title.equals("Trailer", ignoreCase = true) &&
+                    !title.equals("Download", ignoreCase = true) &&
+                    !title.equals("Watch", ignoreCase = true) &&
+                    !title.equals("Movie", ignoreCase = true)
+            }
+    }
+
+    private fun titleFromUrl(url: String): String {
+        val slug = url.trimEnd('/')
+            .substringAfterLast('/')
+            .substringBefore('?')
+            .substringBefore('#')
+        return slug
+            .replace('-', ' ')
+            .replace('_', ' ')
+            .split(' ')
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { part ->
+                if (part.all { ch -> ch.isDigit() }) part
+                else part.lowercase().replaceFirstChar { ch -> ch.uppercase() }
+            }
+    }
+
+    private fun cleanDetailTitle(value: String?): String {
+        return cleanTitle(value)
+            .replace(Regex("(?i)^nonton\\s+"), "")
+            .replace(Regex("(?i)\\s+streaming\\s+movies?.*$"), "")
+            .replace(Regex("(?i)\\s+streaming\\s+film.*$"), "")
+            .replace(Regex("(?i)\\s+film\\s+terbaru.*$"), "")
+            .replace(Regex("(?i)\\s+online\\s+dan\\s+gratis.*$"), "")
+            .replace(Regex("(?i)\\s+terlengkap\\s+subtitle.*$"), "")
+            .replace(Regex("(?i)\\s+01nonton.*$"), "")
+            .replace(Regex("(?i)\\s+-\\s+trailer$"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     private fun cleanTitle(value: String?): String {

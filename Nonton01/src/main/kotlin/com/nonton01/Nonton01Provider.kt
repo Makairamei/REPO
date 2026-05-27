@@ -12,8 +12,10 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.nonton01.Nonton01Utils.mirrorUrlsFor
 import com.nonton01.Nonton01Utils.pageUrls
 import com.nonton01.Nonton01Utils.searchUrl
+import com.nonton01.Nonton01Utils.siteHeadersFor
 
 class Nonton01Provider : MainAPI() {
     override var mainUrl = Nonton01Seeds.MAIN_URL
@@ -26,15 +28,7 @@ class Nonton01Provider : MainAPI() {
     override val mainPage = mainPageOf(*Nonton01Seeds.mainPageRows())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        var results: List<SearchResponse> = emptyList()
-        for (url in pageUrls(mainUrl, request.data, page)) {
-            results = runCatching {
-                val document = app.get(url, headers = Nonton01Utils.siteHeaders, referer = mainUrl).document
-                Nonton01Parser.parseListing(this, document)
-            }.getOrElse { emptyList() }
-            if (results.isNotEmpty()) break
-        }
-
+        val results = firstNonEmptyPageResult(pageUrls(mainUrl, request.data, page))
         return if (results.isNotEmpty()) {
             newHomePageResponse(listOf(HomePageList(request.name, results)))
         } else {
@@ -43,20 +37,34 @@ class Nonton01Provider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return runCatching {
-            val url = searchUrl(mainUrl, query)
-            val document = app.get(url, headers = Nonton01Utils.siteHeaders, referer = mainUrl).document
-            Nonton01Parser.parseListing(this, document)
-        }.getOrElse { emptyList() }
+        val candidates = Nonton01Seeds.MIRROR_URLS.map { searchUrl(it, query) }
+        return firstNonEmptyPageResult(candidates)
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        return runCatching {
-            val document = app.get(url, headers = Nonton01Utils.siteHeaders, referer = mainUrl).document
-            Nonton01Parser.parseLoadResponse(this, url, document)
-        }.getOrNull()
+        for (candidate in mirrorUrlsFor(url)) {
+            val response = runCatching {
+                val origin = Nonton01Utils.originOf(candidate) ?: mainUrl
+                val document = app.get(candidate, headers = siteHeadersFor(origin), referer = origin).document
+                Nonton01Parser.parseLoadResponse(this, candidate, document)
+            }.getOrNull()
+            if (response != null) return response
+        }
+        return null
+    }
+
+    private suspend fun firstNonEmptyPageResult(urls: List<String>): List<SearchResponse> {
+        for (url in urls) {
+            val results = runCatching {
+                val origin = Nonton01Utils.originOf(url) ?: mainUrl
+                val document = app.get(url, headers = siteHeadersFor(origin), referer = origin).document
+                Nonton01Parser.parseListing(this, document)
+            }.getOrElse { emptyList() }
+            if (results.isNotEmpty()) return results
+        }
+        return emptyList()
     }
 
     override suspend fun loadLinks(
