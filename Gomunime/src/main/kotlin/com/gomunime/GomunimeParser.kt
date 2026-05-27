@@ -84,7 +84,6 @@ object GomunimeParser {
 
         return api.newAnimeSearchResponse(title, href, if (type == TvType.AnimeMovie) TvType.AnimeMovie else TvType.Anime) {
             this.posterUrl = poster
-            addSub(epNum)
         }
     }
 
@@ -109,7 +108,8 @@ object GomunimeParser {
         if (title.isBlank() || title.length < 3) return null
 
         return api.newAnimeSearchResponse(title, href, typeFromText(raw)) {
-            addSub(episodeNumber(raw))
+            // Episode counters are intentionally not set here because the target Cloudstream API
+            // used by this repo no longer exposes addSub() in AnimeSearchResponse builders.
         }
     }
 
