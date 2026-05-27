@@ -31,7 +31,7 @@ import java.net.URLEncoder
 
 class SontolFilmProvider : MainAPI() {
     override var mainUrl = "https://sontolfilm.com"
-    override var name = "SontolFilm🦀"
+    override var name = "SontolFilm"
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true

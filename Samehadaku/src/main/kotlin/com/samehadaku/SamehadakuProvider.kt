@@ -15,6 +15,7 @@ import com.lagradost.cloudstream3.addEpisodes
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newAnimeLoadResponse
+import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.samehadaku.SamehadakuUtils.buildPageUrl
@@ -75,15 +76,33 @@ class SamehadakuProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val category = SamehadakuSeeds.mainPage.firstOrNull { it.name == request.name }
         val pageUrl = buildPageUrl(request.data, page)
-        val document = safeGet(pageUrl)?.document ?: return newHomePageResponse(emptyList())
         val mode = category?.mode ?: SamehadakuCategoryMode.Listing
         val isPaged = category?.paged ?: true
-        val results = SamehadakuParser.parseByMode(this, document, pageUrl, mainUrl, mode)
 
-        return if (results.isNotEmpty()) {
-            newHomePageResponse(listOf(HomePageList(request.name, results, isPaged)))
-        } else {
-            newHomePageResponse(emptyList())
+        val liveResults = safeGet(pageUrl)?.document?.let { document ->
+            SamehadakuParser.parseByMode(this, document, pageUrl, mainUrl, mode)
+        }.orEmpty()
+
+        val results = liveResults.ifEmpty { fallbackResults(request.name, mode) }
+        return newHomePageResponse(listOf(HomePageList(request.name, results, isPaged)))
+    }
+
+    private fun fallbackResults(name: String, mode: SamehadakuCategoryMode): List<SearchResponse> {
+        val seeds = when (mode) {
+            SamehadakuCategoryMode.HomeTop -> SamehadakuSeeds.fallbackTop
+            SamehadakuCategoryMode.HomeMovie -> SamehadakuSeeds.fallbackMovies
+            else -> SamehadakuSeeds.fallbackLatest
+        }
+        val filtered = when {
+            name.contains("Movie", true) || name.contains("Film", true) -> seeds.filter { it.movie }.ifEmpty { SamehadakuSeeds.fallbackMovies }
+            else -> seeds
+        }
+        return filtered.map { item ->
+            newAnimeSearchResponse(
+                item.title,
+                item.url,
+                if (item.movie) TvType.AnimeMovie else TvType.Anime
+            )
         }
     }
 

@@ -10,6 +10,12 @@ data class SamehadakuCategory(
     val mode: SamehadakuCategoryMode = SamehadakuCategoryMode.Listing
 )
 
+data class SamehadakuSeedItem(
+    val title: String,
+    val url: String,
+    val movie: Boolean = false
+)
+
 enum class SamehadakuCategoryMode {
     HomeLatest,
     HomeTop,
