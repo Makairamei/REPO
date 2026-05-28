@@ -28,13 +28,10 @@ internal object PutarFlixSeeds {
         PutarFlixCategory("/category/vivamax/", "Vivamax")
     )
 
-    val playerNumbers = listOf("1", "2", "3", "4")
+    // Current PutarFlix pages expose three server tabs: base page, ?player=2, and ?player=3.
+    // Keeping this tight prevents needless requests and avoids slow/infinite loadLinks chains.
+    val playerNumbers = listOf("1", "2", "3")
 
-    val ajaxActions = listOf(
-        "doo_player_ajax",
-        "dooplay_player",
-        "player_ajax",
-        "get_player",
-        "getPlayer"
-    )
+    // Dooplay-style sites normally use doo_player_ajax. Keep one legacy fallback only.
+    val ajaxActions = listOf("doo_player_ajax", "dooplay_player")
 }

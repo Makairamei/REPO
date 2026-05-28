@@ -29,6 +29,18 @@ internal object PutarFlixParser {
         ".main-content"
     ).joinToString(",")
 
+    private val metadataSelectors = listOf(
+        ".mvic-info",
+        ".movie-info",
+        ".entry-meta",
+        ".postmeta",
+        ".sbox",
+        ".extra",
+        ".data",
+        ".info-content",
+        ".entry-content"
+    ).joinToString(",")
+
     fun parseHomeSections(api: MainAPI, doc: Document, fallbackName: String): List<HomePageList> {
         val sections = doc.select(sectionSelectors).mapNotNull { section ->
             val title = sectionTitle(section) ?: return@mapNotNull null
@@ -90,13 +102,18 @@ internal object PutarFlixParser {
                 ?: doc.title()
         ).ifBlank { return null }
 
-        val bodyText = doc.body()?.text().orEmpty()
+        val metadataText = doc.select(metadataSelectors)
+            .joinToString(" ") { it.text() }
+            .ifBlank { doc.selectFirst("article, main, .single, .content")?.text().orEmpty() }
+        val descriptionText = doc.select(".entry-content p, .wp-content p, .description, .desc, .storyline")
+            .firstOrNull { it.text().length > 30 }
+            ?.text()
+
         val poster = PutarFlixUtils.extractMetaImage(api.mainUrl, doc)
         val plot = PutarFlixUtils.cleanText(
             doc.selectFirst("meta[property=og:description]")?.attr("content")
                 ?: doc.selectFirst("meta[name=description]")?.attr("content")
-                ?: doc.selectFirst(".entry-content p, .wp-content p, .description, .desc, .storyline")?.text()
-                ?: doc.selectFirst("p")?.text()
+                ?: descriptionText
         ).ifBlank { null }
 
         val tags = doc.select("a[rel=tag], .sgeneros a, .genxed a, .mta a, a[href*='/category/']")
@@ -106,13 +123,13 @@ internal object PutarFlixParser {
             .take(20)
 
         val recommendations = parseCards(api, doc).filterNot { it.url == url }.take(12)
-        val year = PutarFlixUtils.extractYear(bodyText) ?: PutarFlixUtils.extractYear(title)
-        val duration = PutarFlixUtils.extractDuration(bodyText)
+        val year = PutarFlixUtils.extractYear(metadataText) ?: PutarFlixUtils.extractYear(title)
+        val duration = PutarFlixUtils.extractDuration(metadataText)
         val rating = PutarFlixUtils.extractRating(doc.selectFirst(".rating, .imdb, .starstruck-rating, .dt_rating_vgs")?.text())
-            ?: PutarFlixUtils.extractRating(bodyText)
+            ?: PutarFlixUtils.extractRating(metadataText)
 
         val episodes = parseEpisodes(api, doc)
-        val type = PutarFlixUtils.typeFrom(url, title, bodyText)
+        val type = PutarFlixUtils.typeFrom(url, title, metadataText)
 
         return if (type == TvType.TvSeries && episodes.isNotEmpty() && !url.contains("/eps/")) {
             api.newTvSeriesLoadResponse(title, url, type, episodes) {

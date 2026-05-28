@@ -30,7 +30,7 @@ internal object PutarFlixUtils {
     fun cleanTitle(value: String?): String {
         return cleanText(value)
             .replace(Regex("(?i)\\s*[-|]\\s*PUTARFLIX.*$"), "")
-            .replace(Regex("(?i)^Nonton\\s+(Film|Movie|Series)\\s+"), "")
+            .replace(Regex("(?i)^Nonton\\s+(?:Film|Movie|Series)\\s+(.+)$"), "\$1")
             .replace(Regex("(?i)\\s+Sub\\s+Indo.*$"), "")
             .trim()
     }
@@ -54,11 +54,27 @@ internal object PutarFlixUtils {
         return fixed.trimEnd('/') + "/page/$page/"
     }
 
+    fun hostOf(url: String): String? {
+        return runCatching { URI(url).host?.removePrefix("www.")?.lowercase() }.getOrNull()
+    }
+
+    fun isPutarFlixUrl(url: String): Boolean {
+        return hostOf(url) == hostOf(PutarFlixSeeds.MAIN_URL)
+    }
+
     fun isContentUrl(url: String): Boolean {
         val lower = url.lowercase()
         if (!lower.startsWith(PutarFlixSeeds.MAIN_URL)) return false
         if (badContentPaths.any { it in lower }) return false
         return lower.contains("/eps/") || lower.contains("/tv/") || Regex("https?://[^/]+/[^/?#]+/?$").containsMatchIn(lower)
+    }
+
+    fun isInternalNavigation(url: String): Boolean {
+        if (!isPutarFlixUrl(url)) return false
+        if (looksDirectVideo(url)) return false
+        val lower = url.lowercase()
+        if (lower.contains("?player=")) return true
+        return isContentUrl(url) || badContentPaths.any { it in lower } || lower.trimEnd('/') == PutarFlixSeeds.MAIN_URL
     }
 
     fun isRejectedVideoCandidate(url: String): Boolean {
@@ -176,30 +192,45 @@ internal object PutarFlixUtils {
         if (!lower.contains("semawur.com") && !lower.contains("linkduit.net") && !lower.contains("safelinku")) return url
         val rawQuery = runCatching { URI(url).rawQuery }.getOrNull().orEmpty()
         val encoded = rawQuery.split("&")
-            .firstOrNull { it.substringBefore("=") == "url" }
+            .firstOrNull { it.substringBefore("=") in listOf("url", "u", "go", "target") }
             ?.substringAfter("=", "")
             ?.takeIf { it.isNotBlank() }
             ?: return url
-        return runCatching {
-            val decodedParam = URLDecoder.decode(encoded, "UTF-8")
-            val padded = decodedParam + "=".repeat((4 - decodedParam.length % 4) % 4)
-            String(Base64.getDecoder().decode(padded))
-        }.getOrDefault(url)
+        val decodedParam = decodeUrlRepeated(encoded)
+        val padded = decodedParam + "=".repeat((4 - decodedParam.length % 4) % 4)
+        return runCatching { String(Base64.getDecoder().decode(padded)) }
+            .recoverCatching { String(Base64.getUrlDecoder().decode(padded)) }
+            .getOrDefault(decodedParam.takeIf { it.startsWith("http", true) } ?: url)
+    }
+
+    fun decodeUrlRepeated(value: String): String {
+        var current = value
+        repeat(2) {
+            val decoded = runCatching { URLDecoder.decode(current, "UTF-8") }.getOrDefault(current)
+            if (decoded == current) return current
+            current = decoded
+        }
+        return current
     }
 
     fun extractUrlsFromText(base: String, value: String): List<String> {
         val normalized = value
             .replace("\\/", "/")
             .replace("&amp;", "&")
-            .replace("%3A%2F%2F", "://", ignoreCase = true)
-        val directUrls = Regex("""https?:\\?/\\?/[^\"'<>\\s]+""")
-            .findAll(normalized)
-            .mapNotNull { absoluteUrl(base, it.value.replace("\\/", "/")) }
-            .toList()
-        val protocolLess = Regex("""(?<!:)//[^\"'<>\\s]+""")
-            .findAll(normalized)
-            .mapNotNull { absoluteUrl(base, it.value) }
-            .toList()
-        return (directUrls + protocolLess).distinct()
+            .replace("\\\"", "\"")
+        val pools = listOf(normalized, decodeUrlRepeated(normalized))
+        val candidates = linkedSetOf<String>()
+        val urlRegex = Regex("""https?:\\?/\\?/[^\"'<>\s]+""", RegexOption.IGNORE_CASE)
+        val protocolLessRegex = Regex("""(?<!:)//[^\"'<>\s]+""", RegexOption.IGNORE_CASE)
+        pools.forEach { pool ->
+            urlRegex.findAll(pool).forEach { candidates += it.value }
+            protocolLessRegex.findAll(pool).forEach { candidates += it.value }
+        }
+        return candidates.mapNotNull { raw ->
+            val cleaned = decodeUrlRepeated(raw)
+                .replace("\\/", "/")
+                .trim('"', '\'', ' ', '\n', '\r', '\t', ')', ']', '}')
+            absoluteUrl(base, cleaned)
+        }.distinct()
     }
 }

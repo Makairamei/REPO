@@ -2,15 +2,28 @@ package com.putarflix
 
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.getQualityFromName
+import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 internal object PutarFlixExtractor {
-    private val directVideoRegex = Regex("""https?:\\?/\\?/[^\"'<>\\s]+?\\.(?:m3u8|mp4|mkv|mpd)(?:\?[^\"'<>\\s]+)?""", RegexOption.IGNORE_CASE)
+    private const val MAX_RESOLVE_DEPTH = 3
+
+    private val directVideoRegex = Regex("""https?:\\?/\\?/[^\"'<>\s]+?\.(?:m3u8|mp4|mkv|mpd)(?:\?[^\"'<>\s]+)?""", RegexOption.IGNORE_CASE)
     private val iframeRegex = Regex("""<iframe[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
     private val jsonEmbedRegex = Regex("""["'](?:embed_url|file|url|source|src)["']\s*:\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+
+    private val playerContainers = listOf(
+        "#player", "#player2", "#video", ".player", ".player-area", ".playex",
+        ".movieplay", ".video-content", ".responsive-embed", ".embed-responsive",
+        ".pembed", ".dooplay_player", ".dooplay_player_content", ".server",
+        ".servers", ".server-item", ".player-option", ".download", ".dllinks"
+    ).joinToString(",")
 
     suspend fun extract(
         data: String,
@@ -20,74 +33,99 @@ internal object PutarFlixExtractor {
         val startUrl = PutarFlixUtils.decodeKnownRedirect(data.trim())
         if (startUrl.isBlank()) return false
 
-        if (!startUrl.startsWith(PutarFlixSeeds.MAIN_URL) && PutarFlixUtils.looksDirectVideo(startUrl)) {
-            return emitDirect(startUrl, PutarFlixSeeds.MAIN_URL, "PutarFlix Direct", callback)
+        if (!PutarFlixUtils.isPutarFlixUrl(startUrl)) {
+            if (PutarFlixUtils.looksDirectVideo(startUrl)) {
+                return emitDirect(startUrl, PutarFlixSeeds.MAIN_URL, "PutarFlix Direct", callback)
+            }
+            return resolveServer(startUrl, PutarFlixSeeds.MAIN_URL, "PutarFlix External", subtitleCallback, callback)
         }
 
-        val candidates = linkedSetOf<PutarFlixServer>()
-
-        if (!startUrl.startsWith(PutarFlixSeeds.MAIN_URL)) {
-            candidates += PutarFlixServer("PutarFlix External", startUrl, PutarFlixSeeds.MAIN_URL, "data")
-        } else {
-            val playerPages = buildList {
-                add(startUrl)
-                val clean = startUrl.substringBefore("?")
-                PutarFlixSeeds.playerNumbers.forEach { number ->
-                    add("$clean?player=$number")
-                }
-            }.distinct()
-
-            for (page in playerPages) {
-                val doc = runCatching { app.get(page, referer = PutarFlixSeeds.MAIN_URL).document }.getOrNull() ?: continue
-                candidates += collectServersFromDocument(page, doc)
-                candidates += collectAjaxServers(page, doc)
+        val playerPages = buildList {
+            add(startUrl)
+            val clean = startUrl.substringBefore("?")
+            PutarFlixSeeds.playerNumbers.forEach { number ->
+                if (number == "1") add(clean) else add("$clean?player=$number")
             }
+        }.distinct()
+
+        val candidates = linkedSetOf<PutarFlixServer>()
+        for (page in playerPages) {
+            val doc = runCatching { app.get(page, referer = PutarFlixSeeds.MAIN_URL).document }.getOrNull() ?: continue
+            candidates += collectServersFromDocument(page, doc)
+            candidates += collectAjaxServers(page, doc)
         }
 
         var found = false
+        val visited = linkedSetOf<String>()
         for (server in candidates.distinctBy { it.url }) {
             val finalUrl = PutarFlixUtils.decodeKnownRedirect(server.url)
-            if (PutarFlixUtils.isRejectedVideoCandidate(finalUrl)) continue
-            found = resolveServer(finalUrl, server.referer, server.label, subtitleCallback, callback) || found
+            if (shouldSkipCandidate(finalUrl, allowPlayerPage = false)) continue
+            found = resolveServer(finalUrl, server.referer, server.label, subtitleCallback, callback, visited) || found
+            if (found) break
         }
         return found
     }
 
     private fun collectServersFromDocument(pageUrl: String, doc: Document): List<PutarFlixServer> {
-        val servers = mutableListOf<PutarFlixServer>()
+        val servers = linkedSetOf<PutarFlixServer>()
 
-        doc.select("iframe[src], embed[src], video[src], source[src], a[href]").forEach { element ->
-            val raw = firstAttr(element, "src", "data-src", "data-lazy-src", "href", "data-link", "data-url") ?: return@forEach
-            val url = PutarFlixUtils.absoluteUrl(pageUrl, raw) ?: return@forEach
-            if (PutarFlixUtils.isRejectedVideoCandidate(url)) return@forEach
-            servers += PutarFlixServer(PutarFlixUtils.extractLabelNear(element), url, pageUrl, element.tagName())
+        // Iframe/video/source are real player carriers. Scan them globally because themes often keep
+        // the actual embed outside the visible server list.
+        doc.select("iframe[src], embed[src], video[src], source[src]").forEach { element ->
+            addServerFromElement(servers, pageUrl, element, allowInternalPlayerPage = false)
+        }
+
+        // Anchor scanning is intentionally limited to player/download containers so menus,
+        // categories, related posts, and the same PutarFlix detail page do not cause recursive loops.
+        doc.select(playerContainers).forEach { container ->
+            container.select("a[href], button, div, li, span").forEach { element ->
+                addServerFromElement(servers, pageUrl, element, allowInternalPlayerPage = true)
+            }
         }
 
         val scriptText = doc.select("script").joinToString("\n") { it.data() + "\n" + it.html() }
         directVideoRegex.findAll(scriptText).forEach { match ->
             val url = PutarFlixUtils.absoluteUrl(pageUrl, match.value) ?: return@forEach
-            servers += PutarFlixServer("PutarFlix Direct", url, pageUrl, "script-direct")
-        }
-        PutarFlixUtils.extractUrlsFromText(pageUrl, scriptText).forEach { url ->
-            if (!PutarFlixUtils.isRejectedVideoCandidate(url) && !url.startsWith(PutarFlixSeeds.MAIN_URL)) {
-                servers += PutarFlixServer("PutarFlix Script", url, pageUrl, "script-url")
+            if (!shouldSkipCandidate(url, allowPlayerPage = false)) {
+                servers += PutarFlixServer("PutarFlix Direct", url, pageUrl, "script-direct")
             }
         }
         jsonEmbedRegex.findAll(scriptText).forEach { match ->
             val url = PutarFlixUtils.absoluteUrl(pageUrl, match.groupValues[1]) ?: return@forEach
-            if (!PutarFlixUtils.isRejectedVideoCandidate(url)) {
+            if (!shouldSkipCandidate(url, allowPlayerPage = false)) {
                 servers += PutarFlixServer("PutarFlix Embed", url, pageUrl, "script-json")
+            }
+        }
+        PutarFlixUtils.extractUrlsFromText(pageUrl, scriptText).forEach { url ->
+            if (!shouldSkipCandidate(url, allowPlayerPage = false)) {
+                servers += PutarFlixServer("PutarFlix Script", url, pageUrl, "script-url")
             }
         }
 
         return servers.distinctBy { it.url }
     }
 
+    private fun addServerFromElement(
+        servers: MutableSet<PutarFlixServer>,
+        pageUrl: String,
+        element: Element,
+        allowInternalPlayerPage: Boolean
+    ) {
+        val raw = firstAttr(
+            element,
+            "src", "data-src", "data-lazy-src", "data-iframe", "data-embed", "data-link",
+            "data-url", "data-video", "data-file", "data-href", "href"
+        ) ?: return
+        val url = PutarFlixUtils.absoluteUrl(pageUrl, raw) ?: return
+        if (shouldSkipCandidate(url, allowPlayerPage = allowInternalPlayerPage)) return
+        servers += PutarFlixServer(PutarFlixUtils.extractLabelNear(element), url, pageUrl, element.tagName())
+    }
+
     private suspend fun collectAjaxServers(pageUrl: String, doc: Document): List<PutarFlixServer> {
-        val players = collectAjaxPlayers(doc)
+        val players = collectAjaxPlayers(pageUrl, doc)
         if (players.isEmpty()) return emptyList()
 
-        val output = mutableListOf<PutarFlixServer>()
+        val output = linkedSetOf<PutarFlixServer>()
         for (player in players) {
             for (action in PutarFlixSeeds.ajaxActions) {
                 val response = runCatching {
@@ -107,60 +145,61 @@ internal object PutarFlixExtractor {
                     ).text
                 }.getOrNull() ?: continue
 
-                output += collectServersFromAjaxText(pageUrl, response, player.label)
-                if (output.isNotEmpty()) break
+                val found = collectServersFromAjaxText(pageUrl, response, player.label)
+                if (found.isNotEmpty()) {
+                    output += found
+                    break
+                }
             }
         }
         return output.distinctBy { it.url }
     }
 
-    private fun collectAjaxPlayers(doc: Document): List<PutarFlixAjaxPlayer> {
-        val players = mutableListOf<PutarFlixAjaxPlayer>()
-        doc.select(".dooplay_player_option, [data-post][data-nume], [data-type][data-post], li[id*=player-option], a[data-post]").forEach { element ->
-            val post = element.attr("data-post").ifBlank { element.attr("data-id") }
-            val nume = element.attr("data-nume").ifBlank { element.attr("data-server") }.ifBlank { element.attr("data-player") }
-            val type = element.attr("data-type").ifBlank { if (doc.location().contains("/tv/") || doc.location().contains("/eps/")) "tv" else "movie" }
-            if (post.isNotBlank() && nume.isNotBlank()) {
-                players += PutarFlixAjaxPlayer(post, type, nume, PutarFlixUtils.extractLabelNear(element))
-            }
-        }
+    private fun collectAjaxPlayers(pageUrl: String, doc: Document): List<PutarFlixAjaxPlayer> {
+        val players = linkedSetOf<PutarFlixAjaxPlayer>()
+        val fallbackType = if (pageUrl.contains("/tv/") || pageUrl.contains("/eps/")) "tv" else "movie"
 
-        val html = doc.html()
-        Regex("""data-post=["'](\d+)["'][^>]+data-nume=["'](\d+)["'][^>]+data-type=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-            .findAll(html)
-            .forEach { match ->
-                players += PutarFlixAjaxPlayer(match.groupValues[1], match.groupValues[3], match.groupValues[2], "Server ${match.groupValues[2]}")
+        doc.select("[data-post][data-nume], [data-type][data-post], .dooplay_player_option, li[id*=player-option], .server-item[data-id]")
+            .forEach { element ->
+                val post = firstAttr(element, "data-post", "data-id", "data-postid", "data-post-id") ?: return@forEach
+                val nume = firstAttr(element, "data-nume", "data-server", "data-player", "data-number", "data-no") ?: return@forEach
+                val type = firstAttr(element, "data-type") ?: fallbackType
+                players += PutarFlixAjaxPlayer(post, type, nume, PutarFlixUtils.extractLabelNear(element))
             }
 
         return players.distinctBy { "${it.postId}:${it.type}:${it.nume}" }
     }
 
     private fun collectServersFromAjaxText(pageUrl: String, response: String, label: String): List<PutarFlixServer> {
-        val decoded = response
+        val decoded = PutarFlixUtils.decodeUrlRepeated(response)
             .replace("\\/", "/")
             .replace("&amp;", "&")
             .replace("\\\"", "\"")
 
-        val output = mutableListOf<PutarFlixServer>()
+        val output = linkedSetOf<PutarFlixServer>()
         jsonEmbedRegex.findAll(decoded).forEach { match ->
             val url = PutarFlixUtils.absoluteUrl(pageUrl, match.groupValues[1]) ?: return@forEach
-            output += PutarFlixServer(label, url, pageUrl, "ajax-json")
+            if (!shouldSkipCandidate(url, allowPlayerPage = false)) {
+                output += PutarFlixServer(label, url, pageUrl, "ajax-json")
+            }
         }
         iframeRegex.findAll(decoded).forEach { match ->
             val url = PutarFlixUtils.absoluteUrl(pageUrl, match.groupValues[1]) ?: return@forEach
-            output += PutarFlixServer(label, url, pageUrl, "ajax-iframe")
+            if (!shouldSkipCandidate(url, allowPlayerPage = false)) {
+                output += PutarFlixServer(label, url, pageUrl, "ajax-iframe")
+            }
         }
         PutarFlixUtils.extractUrlsFromText(pageUrl, decoded).forEach { url ->
-            output += PutarFlixServer(label, url, pageUrl, "ajax-url")
+            if (!shouldSkipCandidate(url, allowPlayerPage = false)) {
+                output += PutarFlixServer(label, url, pageUrl, "ajax-url")
+            }
         }
 
         val htmlDoc = Jsoup.parse(decoded, pageUrl)
-        htmlDoc.select("iframe[src], source[src], video[src], a[href]").forEach { element ->
-            val raw = firstAttr(element, "src", "href", "data-src", "data-link", "data-url") ?: return@forEach
-            val url = PutarFlixUtils.absoluteUrl(pageUrl, raw) ?: return@forEach
-            output += PutarFlixServer(label, url, pageUrl, "ajax-html")
+        htmlDoc.select("iframe[src], embed[src], source[src], video[src]").forEach { element ->
+            addServerFromElement(output, pageUrl, element, allowInternalPlayerPage = false)
         }
-        return output.filterNot { PutarFlixUtils.isRejectedVideoCandidate(it.url) }.distinctBy { it.url }
+        return output.distinctBy { it.url }
     }
 
     private suspend fun resolveServer(
@@ -168,24 +207,39 @@ internal object PutarFlixExtractor {
         referer: String,
         label: String,
         subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
+        callback: (ExtractorLink) -> Unit,
+        visited: MutableSet<String> = linkedSetOf(),
+        depth: Int = 0
     ): Boolean {
-        if (PutarFlixUtils.looksDirectVideo(url)) {
-            return emitDirect(url, referer, label, callback)
-        }
+        val fixedUrl = PutarFlixUtils.decodeKnownRedirect(url)
+        if (depth > MAX_RESOLVE_DEPTH || fixedUrl in visited) return false
+        visited += fixedUrl
 
-        val loaded = runCatching { loadExtractor(url, referer, subtitleCallback, callback) }.getOrDefault(false)
+        if (PutarFlixUtils.looksDirectVideo(fixedUrl)) {
+            return emitDirect(fixedUrl, referer, label, callback)
+        }
+        if (shouldSkipCandidate(fixedUrl, allowPlayerPage = false)) return false
+
+        val loaded = runCatching { loadExtractor(fixedUrl, referer, subtitleCallback, callback) }.getOrDefault(false)
         if (loaded) return true
 
-        val doc = runCatching { app.get(url, referer = referer).document }.getOrNull() ?: return false
-        val nested = collectServersFromDocument(url, doc)
+        val doc = runCatching { app.get(fixedUrl, referer = referer).document }.getOrNull() ?: return false
+        val nested = collectServersFromDocument(fixedUrl, doc)
         var found = false
         for (server in nested.distinctBy { it.url }) {
-            val fixed = PutarFlixUtils.decodeKnownRedirect(server.url)
-            if (PutarFlixUtils.isRejectedVideoCandidate(fixed)) continue
-            found = resolveServer(fixed, server.referer, server.label, subtitleCallback, callback) || found
+            val nestedUrl = PutarFlixUtils.decodeKnownRedirect(server.url)
+            if (shouldSkipCandidate(nestedUrl, allowPlayerPage = false)) continue
+            found = resolveServer(nestedUrl, fixedUrl, server.label, subtitleCallback, callback, visited, depth + 1) || found
+            if (found) break
         }
         return found
+    }
+
+    private fun shouldSkipCandidate(url: String, allowPlayerPage: Boolean): Boolean {
+        if (PutarFlixUtils.isRejectedVideoCandidate(url)) return true
+        if (!allowPlayerPage && PutarFlixUtils.isInternalNavigation(url)) return true
+        if (PutarFlixUtils.isPutarFlixUrl(url) && !PutarFlixUtils.looksDirectVideo(url) && !url.contains("?player=")) return true
+        return false
     }
 
     private suspend fun emitDirect(
