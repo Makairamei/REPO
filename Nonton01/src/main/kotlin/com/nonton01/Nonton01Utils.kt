@@ -25,7 +25,7 @@ object Nonton01Utils {
     private val catalogSegments = setOf(
         "", "page", "dmca", "faq", "kontak", "contact", "about", "privacy",
         "movie", "movies", "film", "tv-series", "series", "tvshows", "tv-shows",
-        "film-dewasa", "adult", "semi", "bokep", "jav",
+        "film-semi", "film-dewasa", "adult", "semi", "bokep", "jav", "drakor", "dracin", "k-drama", "drama-china",
         "action", "adventure", "animation", "anime", "comedy", "crime",
         "drama", "fantasy", "horror", "mystery", "romance", "sci-fi",
         "science-fiction", "thriller", "k-drama", "indonesia", "usa", "korea",
@@ -172,7 +172,7 @@ object Nonton01Utils {
 
         return when {
             parts.size == 1 -> true
-            parts.size == 2 && parts.first().lowercase() in setOf("movie", "movies", "film", "tv-series", "series", "film-dewasa") -> true
+            parts.size == 2 && parts.first().lowercase() in setOf("movie", "movies", "film", "tv-series", "series", "film-semi", "film-dewasa", "drakor", "dracin") -> true
             else -> false
         }
     }

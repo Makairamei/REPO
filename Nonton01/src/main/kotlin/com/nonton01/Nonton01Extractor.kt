@@ -5,6 +5,7 @@ import android.util.Log
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.newSubtitleFile
+import com.lagradost.cloudstream3.extractors.helper.AesHelper
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
 import com.lagradost.cloudstream3.utils.Qualities
@@ -27,34 +28,34 @@ object Nonton01Extractor {
     private const val MAX_HOPS = 5
     private const val MAX_DIRECT_CANDIDATES = 26
     private const val MAX_EMBED_CANDIDATES = 32
-    private const val MAX_AJAX_CANDIDATES = 96
+    private const val MAX_AJAX_CANDIDATES = 240
 
     private val keyValueRegex = Regex(
         """(?i)(?:file|src|url|source|hls|hlsUrl|video|videoUrl|stream|streamUrl|playlist|embed|iframe|link|player|content)
-            .{0,16}[:=]\s*['\"]([^'\"]+)['\"]""".trimIndent().replace("\n", "")
+            .{0,16}[:=]\s*['"]([^'"]+)['"]""".trimIndent().replace("\n", "")
     )
     private val quotedUrlRegex = Regex(
-        """(?i)['\"]((?:https?:)?//[^'\"<>\s]+|/[^'\"<>\s]+)['\"]"""
+        """(?i)['"]((?:https?:)?//[^'"<>\s]+|/[^'"<>\s]+)['"]"""
     )
     private val bareMediaRegex = Regex(
-        """(?i)(?:https?:)?//[^\s'\"<>]+?(?:m3u8|mp4|videoplayback|get_video|master|playlist)[^\s'\"<>]*"""
+        """(?i)(?:https?:)?//[^\s'"<>]+?(?:m3u8|mp4|webm|mkv|txt|videoplayback|get_video|master|playlist)[^\s'"<>]*"""
     )
     private val packedEvalRegex = Regex(
-        """eval\s*\(\s*function\s*\(p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*(?:r|d)\s*\).*?\}\s*\(\s*['\"](.*?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.*?)['\"]\.split\s*\(\s*['\"]\|['\"]\s*\)""",
+        """eval\s*\(\s*function\s*\(p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*(?:r|d)\s*\).*?\}\s*\(\s*['"](.*?)['"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['"](.*?)['"]\.split\s*\(\s*['"]\|['"]\s*\)""",
         setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
     )
-    private val iframeRegex = Regex("""(?i)<iframe[^>]+src\s*=\s*['\"]([^'\"]+)['\"]""")
-    private val encodedUrlRegex = Regex("""https?%3A%2F%2F[^'\"<>\s]+""", RegexOption.IGNORE_CASE)
-    private val atobRegex = Regex("""(?i)atob\s*\(\s*['\"]([A-Za-z0-9+/=_-]{16,})['\"]\s*\)""")
-    private val base64StringRegex = Regex("""['\"]([A-Za-z0-9+/=]{28,})['\"]""")
-    private val dataPostRegex = Regex("""(?i)data-(?:post|id|movie|movieid)\s*=\s*['\"]?(\d+)""")
-    private val dataNumeRegex = Regex("""(?i)data-(?:nume|server|episode)\s*=\s*['\"]?(\d+)""")
-    private val dataTypeRegex = Regex("""(?i)data-type\s*=\s*['\"]?([a-zA-Z0-9_-]+)""")
-    private val jsPostRegex = Regex("""(?i)(?:post|post_id|movie_id|id)\s*[:=]\s*['\"]?(\d+)""")
+    private val iframeRegex = Regex("""(?i)<iframe[^>]+src\s*=\s*['"]([^'"]+)['"]""")
+    private val encodedUrlRegex = Regex("""https?%3A%2F%2F[^'"<>\s]+""", RegexOption.IGNORE_CASE)
+    private val atobRegex = Regex("""(?i)atob\s*\(\s*['"]([A-Za-z0-9+/=_-]{16,})['"]\s*\)""")
+    private val base64StringRegex = Regex("""['"]([A-Za-z0-9+/=]{28,})['"]""")
+    private val dataPostRegex = Regex("""(?i)data-(?:post|id|movie|movieid)\s*=\s*['"]?(\d+)""")
+    private val dataNumeRegex = Regex("""(?i)data-(?:nume|server|episode)\s*=\s*['"]?(\d+)""")
+    private val dataTypeRegex = Regex("""(?i)data-type\s*=\s*['"]?([a-zA-Z0-9_-]+)""")
+    private val jsPostRegex = Regex("""(?i)(?:post|post_id|movie_id|id)\s*[:=]\s*['"]?(\d+)""")
     private val bodyPostRegex = Regex("""(?i)(?:postid-|post-|wp-post-)(\d{2,})""")
-    private val ajaxUrlRegex = Regex("""(?i)(?:ajaxurl|ajax_url|admin_ajax|adminajax|ajaxUrl)\s*[=:]\s*[\'\"]([^\'\"]*admin-ajax\.php[^\'\"]*)[\'\"]""")
-    private val anyAdminAjaxRegex = Regex("""(?i)(?:https?:)?//[^\'\"<>\s]+admin-ajax\.php[^\'\"<>\s]*|/[^\'\"<>\s]*admin-ajax\.php[^\'\"<>\s]*""")
-    private val nonceRegex = Regex("""(?i)(?:nonce|security|_wpnonce|player_nonce|doo_nonce|dtNonce|playnonce)\s*[=:]\s*[\'\"]([A-Za-z0-9_\-]{5,})[\'\"]""")
+    private val ajaxUrlRegex = Regex("""(?i)(?:ajaxurl|ajax_url|admin_ajax|adminajax|ajaxUrl)\s*[=:]\s*[\'"]([^\'"]*admin-ajax\.php[^\'"]*)[\'"]""")
+    private val anyAdminAjaxRegex = Regex("""(?i)(?:https?:)?//[^\'"<>\s]+admin-ajax\.php[^\'"<>\s]*|/[^\'"<>\s]*admin-ajax\.php[^\'"<>\s]*""")
+    private val nonceRegex = Regex("""(?i)(?:nonce|security|_wpnonce|player_nonce|doo_nonce|dtNonce|playnonce)\s*[=:]\s*[\'"]([A-Za-z0-9_\-]{5,})[\'"]""")
 
     private data class AjaxProbe(
         val post: String,
@@ -158,25 +159,26 @@ object Nonton01Extractor {
         emitted: MutableSet<String>,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        val playableUrl = normalizePlayableUrl(url)
         return try {
             when {
-                looksLikeHls(url) -> {
+                looksLikeHls(playableUrl) -> {
                     val links = generateM3u8(
                         source = providerName,
-                        streamUrl = url,
+                        streamUrl = playableUrl,
                         referer = referer,
                         headers = videoHeaders(referer)
                     )
                     links.forEach { link ->
                         if (emitted.add(link.url)) callback(link)
                     }
-                    if (links.isEmpty()) Log.e(TAG, "generateM3u8 returned empty: $url")
+                    if (links.isEmpty()) Log.e(TAG, "generateM3u8 returned empty: $playableUrl")
                     links.isNotEmpty()
                 }
-                looksLikeDirectMp4(url) -> {
-                    if (emitted.add(url)) {
+                looksLikeDirectMp4(playableUrl) -> {
+                    if (emitted.add(playableUrl)) {
                         callback(
-                            newExtractorLink(providerName, "$providerName MP4", url) {
+                            newExtractorLink(providerName, "$providerName MP4", playableUrl) {
                                 this.referer = referer
                                 this.quality = Qualities.Unknown.value
                                 this.headers = videoHeaders(referer)
@@ -188,11 +190,11 @@ object Nonton01Extractor {
                     }
                 }
                 else -> {
-                    if (!shouldTryHlsFallback(url)) return false
+                    if (!shouldTryHlsFallback(playableUrl)) return false
                     val links = runCatching {
                         generateM3u8(
                             source = providerName,
-                            streamUrl = url,
+                            streamUrl = playableUrl,
                             referer = referer,
                             headers = videoHeaders(referer)
                         )
@@ -248,11 +250,77 @@ object Nonton01Extractor {
                 extractDood(providerName, url, referer, emitted, callback)
             low.contains("streamtape") || low.contains("stape") ->
                 extractStreamTape(providerName, url, referer, emitted, callback)
+            low.contains("jeniusplay") ->
+                extractJeniusplay(providerName, url, referer, emitted, subtitleCallback, callback)
             low.contains("filemoon") || low.contains("vidhide") || low.contains("vidguard") ||
-                low.contains("streamwish") || low.contains("filelions") || low.contains("streamruby") ->
+                low.contains("streamwish") || low.contains("filelions") || low.contains("streamruby") ||
+                low.contains("playcinematic") || low.contains("player4u") || low.contains("hglink") ||
+                low.contains("myvidplay") || low.contains("minochinos") ->
                 extractPackedPlayer(providerName, url, referer, emitted, subtitleCallback, callback)
             else -> false
         }
+    }
+
+    private suspend fun extractJeniusplay(
+        providerName: String,
+        url: String,
+        referer: String,
+        emitted: MutableSet<String>,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val origin = originOf(url) ?: "https://jeniusplay.com"
+        val fixedUrl = normalizeUrl(referer, url) ?: url
+        val html = runCatching { app.get(fixedUrl, headers = Nonton01Utils.siteHeadersFor(referer), referer = referer).text }
+            .onFailure { Log.e(TAG, "jeniusplay GET failed $fixedUrl: ${it.message}") }
+            .getOrNull()
+
+        val hash = fixedUrl.substringAfter("data=", "")
+            .substringBefore("&")
+            .ifBlank { fixedUrl.trimEnd('/').substringAfterLast('/') }
+            .trim()
+
+        var found = false
+        if (hash.isNotBlank()) {
+            val response = runCatching {
+                app.post(
+                    url = "${origin.trimEnd('/')}/player/index.php?data=$hash&do=getVideo",
+                    data = mapOf("hash" to hash, "r" to referer),
+                    referer = referer,
+                    headers = mapOf(
+                        "X-Requested-With" to "XMLHttpRequest",
+                        "Accept" to "application/json, text/javascript, */*; q=0.01"
+                    )
+                ).text
+            }.onFailure { Log.e(TAG, "jeniusplay ajax failed hash=$hash: ${it.message}") }.getOrNull()
+
+            val source = response
+                ?.let { normalizedText(it) }
+                ?.let { raw ->
+                    runCatching { JSONObject(raw).optString("videoSource") }.getOrNull()
+                        ?.ifBlank { runCatching { JSONObject(raw).optString("securedLink") }.getOrNull().orEmpty() }
+                        ?.ifBlank { extractUrlsFromText(fixedUrl, raw).firstOrNull().orEmpty() }
+                }
+                ?.takeIf { it.isNotBlank() }
+                ?.let { normalizeUrl(fixedUrl, it) }
+
+            if (!source.isNullOrBlank()) {
+                found = emitDirect(providerName, source, fixedUrl, emitted, callback) || found
+            }
+        }
+
+        if (!html.isNullOrBlank()) {
+            collectSubtitles(fixedUrl, Jsoup.parse(html, fixedUrl), subtitleCallback)
+            prioritizeCandidates(extractUrlsFromText(fixedUrl, html)).take(16).forEach { candidate ->
+                found = emitDirect(providerName, candidate, fixedUrl, emitted, callback) || found
+                if (!found && shouldProbeAsEmbed(candidate, fixedUrl)) {
+                    found = runExtractor(candidate, fixedUrl, emitted, subtitleCallback, callback) || found
+                }
+            }
+        }
+
+        Log.e(TAG, "custom jeniusplay found=$found url=$fixedUrl")
+        return found
     }
 
     private suspend fun extractPackedPlayer(
@@ -291,11 +359,11 @@ object Nonton01Extractor {
             .getOrNull() ?: return false
         val normalized = normalizedText(html)
         val direct = linkedSetOf<String>()
-        Regex("""(?i)(?:https?:)?//[^'\"<>\s]+?/get_video\?[^'\"<>\s]+""")
+        Regex("""(?i)(?:https?:)?//[^'"<>\s]+?/get_video\?[^'"<>\s]+""")
             .findAll(normalized)
             .mapNotNull { normalizeUrl(url, it.value) }
             .forEach { direct.add(it) }
-        Regex("""(?i)robotlink['\"]?\)?\.innerHTML\s*=\s*['\"]([^'\"]+)['\"]\s*\+\s*\(?\s*['\"]([^'\"]+)['\"]""")
+        Regex("""(?i)robotlink['"]?\)?\.innerHTML\s*=\s*['"]([^'"]+)['"]\s*\+\s*\(?\s*['"]([^'"]+)['"]""")
             .find(normalized)
             ?.let { match -> normalizeUrl(url, match.groupValues[1] + match.groupValues[2]) }
             ?.let { direct.add(it) }
@@ -327,8 +395,8 @@ object Nonton01Extractor {
         val html = runCatching { app.get(url, headers = Nonton01Utils.siteHeadersFor(referer), referer = referer).text }
             .onFailure { Log.e(TAG, "dood GET failed $url: ${it.message}") }
             .getOrNull() ?: return false
-        val passPath = Regex("""(/pass_md5/[^'\"<>\s]+)""").find(html)?.groupValues?.getOrNull(1) ?: return false
-        val token = Regex("""token=([^&'\"<>\s]+)""").find(passPath)?.groupValues?.getOrNull(1).orEmpty()
+        val passPath = Regex("""(/pass_md5/[^'"<>\s]+)""").find(html)?.groupValues?.getOrNull(1) ?: return false
+        val token = Regex("""token=([^&'"<>\s]+)""").find(passPath)?.groupValues?.getOrNull(1).orEmpty()
         val seed = runCatching { app.get(origin.trimEnd('/') + passPath, headers = Nonton01Utils.videoHeaders(url), referer = url).text }
             .onFailure { Log.e(TAG, "dood pass_md5 failed: ${it.message}") }
             .getOrNull()
@@ -550,17 +618,49 @@ object Nonton01Extractor {
 
     private fun extractAjaxNonces(document: Document, html: String): Map<String, String> {
         val out = linkedMapOf<String, String>()
+
+        Regex("""(?i)window\.idlixNonce\s*=\s*['"]([A-Za-z0-9_\-]+)['"]""")
+            .find(html)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { out["_n"] = it }
+        Regex("""(?i)window\.idlixTime\s*=\s*['"]?(\d{5,})['"]?""")
+            .find(html)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { out["_t"] = it }
+
         nonceRegex.findAll(html).forEach { match ->
             val whole = match.value.lowercase()
             val value = match.groupValues[1]
             val key = when {
                 whole.contains("security") -> "security"
                 whole.contains("wpnonce") -> "_wpnonce"
+                whole.contains("player_nonce") -> "player_nonce"
+                whole.contains("doo_nonce") -> "doo_nonce"
                 whole.contains("nonce") -> "nonce"
                 else -> "nonce"
             }
             if (value.isNotBlank()) out[key] = value
         }
+
+        Regex("""(?i)(?:nonce|security|_wpnonce|player_nonce|doo_nonce|dtNonce|playnonce)['"]?\s*:\s*['"]([A-Za-z0-9_\-]{5,})['"]""")
+            .findAll(html)
+            .forEach { match ->
+                val whole = match.value.lowercase()
+                val key = when {
+                    whole.contains("security") -> "security"
+                    whole.contains("wpnonce") -> "_wpnonce"
+                    whole.contains("player_nonce") -> "player_nonce"
+                    whole.contains("doo_nonce") -> "doo_nonce"
+                    whole.contains("nonce") -> "nonce"
+                    else -> "nonce"
+                }
+                out[key] = match.groupValues[1]
+            }
+
         document.select("input[name*=nonce], input[name=security], input[name=_wpnonce], [data-nonce], [data-security]").forEach { element ->
             val name = element.attr("name").ifBlank {
                 when {
@@ -581,11 +681,19 @@ object Nonton01Extractor {
             "nume" to probe.nume,
             "type" to probe.type
         )
+        val playerTokens = nonces.toMutableMap().apply {
+            if (containsKey("_n")) put("_p", probe.post)
+        }
+
         val variants = mutableListOf<Map<String, String>>()
+        variants.add(base + playerTokens)
         variants.add(base + nonces)
-        variants.add(base + mapOf("id" to probe.post) + nonces)
+        variants.add(base + mapOf("id" to probe.post) + playerTokens)
         variants.add(base + mapOf("post_id" to probe.post, "server" to probe.nume) + nonces)
         variants.add(base + mapOf("movie_id" to probe.post, "episode" to probe.nume) + nonces)
+        variants.add(mapOf("action" to action, "id" to probe.post, "server" to probe.nume, "type" to probe.type) + playerTokens)
+        variants.add(mapOf("action" to action, "post_id" to probe.post, "nume" to probe.nume, "type" to probe.type) + nonces)
+
         return variants.distinct().map { params ->
             params.entries.joinToString("&") { (key, value) -> "${urlEncode(key)}=${urlEncode(value)}" }
         }
@@ -602,6 +710,7 @@ object Nonton01Extractor {
                 null -> Unit
                 JSONObject.NULL -> Unit
                 is JSONObject -> {
+                    extractEncryptedDooPlay(value).forEach { collected.add(it) }
                     value.keys().forEach { key -> collectJsonValue(value.opt(key)) }
                 }
                 is JSONArray -> {
@@ -624,6 +733,65 @@ object Nonton01Extractor {
 
         if (collected.isEmpty()) collected.add(normalized)
         return collected.joinToString("\n")
+    }
+
+    private fun extractEncryptedDooPlay(json: JSONObject): List<String> {
+        val out = linkedSetOf<String>()
+        val embed = listOf("embed_url", "embed", "url", "link", "source", "file", "src")
+            .firstNotNullOfOrNull { key -> json.optString(key).takeIf { it.isNotBlank() && !it.equals("null", true) } }
+            ?.let { normalizedText(it) }
+            ?: return emptyList()
+
+        if (embed.startsWith("http", true) || embed.startsWith("//") || embed.contains("<iframe", true)) {
+            out.add(embed)
+        }
+
+        val key = json.optString("key").ifBlank { json.optString("hash") }
+        if (key.isNotBlank()) {
+            val metric = runCatching { JSONObject(embed).optString("m") }.getOrNull().orEmpty()
+            if (metric.isNotBlank()) {
+                buildDooPlayKeys(key, metric).forEach { password ->
+                    val decoded = runCatching {
+                        AesHelper.cryptoAESHandler(embed, password.toByteArray(), false)
+                    }.getOrNull()?.let { normalizedText(it).fixBloat() }
+                    if (!decoded.isNullOrBlank() && !decoded.equals("null", true)) out.add(decoded)
+                }
+            }
+        }
+        return out.toList()
+    }
+
+    private fun buildDooPlayKeys(rawKey: String, metric: String): List<String> {
+        val decodedMetric = safeBase64Decode(metric.reversed()) ?: return emptyList()
+        val indexes = decodedMetric.split('|').mapNotNull { it.toIntOrNull() }
+        val rawParts = rawKey.split("\\x")
+        val filteredParts = rawParts.filter { it.isNotBlank() }
+        val keys = linkedSetOf<String>()
+
+        fun build(parts: List<String>, offset: Int) {
+            val key = indexes.joinToString("") { index ->
+                parts.getOrNull(index + offset)?.let { "\\x$it" }.orEmpty()
+            }
+            if (key.isNotBlank()) keys.add(key)
+        }
+
+        build(filteredParts, 0)
+        build(filteredParts, 1)
+        build(rawParts, 0)
+        build(rawParts, 1)
+        return keys.toList()
+    }
+
+    private fun safeBase64Decode(value: String): String? {
+        return runCatching {
+            val normalized = value.replace('-', '+').replace('_', '/')
+            val padded = normalized + "=".repeat((4 - normalized.length % 4) % 4)
+            String(Base64.decode(padded, Base64.DEFAULT))
+        }.getOrNull()
+    }
+
+    private fun String.fixBloat(): String {
+        return replace("\\/", "/").replace("\\\"", "\"").replace("\\", "").trim('"', '\'', ' ')
     }
 
     private fun extractAjaxIdsFromText(
@@ -866,14 +1034,23 @@ object Nonton01Extractor {
         }.getOrNull()
     }
 
+    private fun normalizePlayableUrl(url: String): String {
+        val low = url.lowercase()
+        return when {
+            low.contains(".txt") && (low.contains("hls") || low.contains("m3u") || low.contains("master") || low.contains("playlist") || low.contains("playcinematic")) ->
+                url.replace(Regex("""\.txt(?=\?|$)""", RegexOption.IGNORE_CASE), ".m3u8")
+            else -> url
+        }
+    }
+
     private fun looksLikeHls(url: String): Boolean {
         val low = url.lowercase()
-        return low.contains(".m3u8") || low.contains("m3u8") || low.contains("playlist") || low.contains("master.m3u")
+        return low.contains(".m3u8") || low.contains("m3u8") || low.contains("playlist") || low.contains("master.m3u") || (low.contains(".txt") && low.contains("hls"))
     }
 
     private fun looksLikeDirectMp4(url: String): Boolean {
         val low = url.lowercase()
-        return low.contains(".mp4") || low.contains("googlevideo") || low.contains("videoplayback") || low.contains("/get_video?")
+        return low.contains(".mp4") || low.contains(".webm") || low.contains(".mkv") || low.contains("googlevideo") || low.contains("videoplayback") || low.contains("/get_video?")
     }
 
     private fun isDirectMediaCandidate(url: String): Boolean {
@@ -943,7 +1120,7 @@ object Nonton01Extractor {
             "voe.sx", "uqload", "mixdrop", "fembed", "doodstream", "streamlare",
             "luluvdo", "vidmoly", "wolfstream", "upstream", "streamruby", "mcloud",
             "streamhide", "streamvid", "embedsito", "filegram", "dropload", "hydrax",
-            "fastream", "streamhub", "vidsrc", "short.ink", "gofile", "mp4upload", "streamwish", "vembed", "vidplay", "vidcloud", "filejoker", "streamhls", "playercdn", "playhydrax"
+            "fastream", "streamhub", "vidsrc", "short.ink", "gofile", "mp4upload", "streamwish", "vembed", "vidplay", "vidcloud", "filejoker", "streamhls", "playercdn", "playhydrax", "jeniusplay", "playcinematic", "player4u", "hownetwork", "emturbovid", "majorplay", "f16"
         ).any { low.contains(it) }
     }
 

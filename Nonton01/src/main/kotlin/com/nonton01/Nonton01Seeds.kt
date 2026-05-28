@@ -1,8 +1,9 @@
 package com.nonton01
 
 object Nonton01Seeds {
-    const val MAIN_URL = "https://91.208.197.221"
+    const val MAIN_URL = "https://01ntn.cc"
     const val PUBLIC_URL = "https://01nonton.com"
+    const val LATEST_LINK_URL = "https://idmax.one/01nonton/"
 
     /**
      * Mirror candidates are intentionally centralized here so runtime fixes do not
@@ -10,12 +11,16 @@ object Nonton01Seeds {
      */
     val MIRROR_URLS = listOf(
         MAIN_URL,
+        "https://www.01ntn.cc",
+        "https://91.208.197.221",
         PUBLIC_URL,
         "https://www.01nonton.com",
         "https://nonton01.com"
     )
 
     val KNOWN_HOSTS = setOf(
+        "01ntn.cc",
+        "www.01ntn.cc",
         "91.208.197.221",
         "01nonton.com",
         "www.01nonton.com",
@@ -33,19 +38,19 @@ object Nonton01Seeds {
      * variasi umum tanpa mengubah label kategori di UI.
      */
     fun mainPageRows(): Array<Pair<String, String>> = arrayOf(
-        paths("/page/%d/", "/movie/page/%d/", "/movies/page/%d/") to "Upload Terbaru",
-        paths("/movie/page/%d/", "/movies/page/%d/", "/film/page/%d/") to "Movies",
+        paths("/page/%d/", "/movies/page/%d/", "/movie/page/%d/") to "Upload Terbaru",
+        paths("/movies/page/%d/", "/movie/page/%d/", "/film/page/%d/") to "Movies",
+        paths("/film-semi/page/%d/", "/film-dewasa/page/%d/", "/semi/page/%d/") to "Film Semi",
+        paths("/drakor/page/%d/", "/k-drama/page/%d/", "/country/korea/page/%d/") to "Drakor",
+        paths("/dracin/page/%d/", "/drama-china/page/%d/", "/country/china/page/%d/") to "Dracin",
         paths("/genre/action/page/%d/", "/action/page/%d/", "/category/action/page/%d/") to "Action",
         paths("/genre/adventure/page/%d/", "/adventure/page/%d/", "/category/adventure/page/%d/") to "Adventure",
         paths("/genre/animation/page/%d/", "/animation/page/%d/", "/category/animation/page/%d/") to "Animation",
         paths("/genre/comedy/page/%d/", "/comedy/page/%d/", "/category/comedy/page/%d/") to "Comedy",
         paths("/genre/crime/page/%d/", "/crime/page/%d/", "/category/crime/page/%d/") to "Crime",
         paths("/genre/drama/page/%d/", "/drama/page/%d/", "/category/drama/page/%d/") to "Drama",
-        paths("/genre/fantasy/page/%d/", "/fantasy/page/%d/", "/category/fantasy/page/%d/") to "Fantasy",
         paths("/genre/horror/page/%d/", "/horror/page/%d/", "/category/horror/page/%d/") to "Horror",
-        paths("/genre/mystery/page/%d/", "/mystery/page/%d/", "/category/mystery/page/%d/") to "Mystery",
         paths("/genre/romance/page/%d/", "/romance/page/%d/", "/category/romance/page/%d/") to "Romance",
-        paths("/genre/science-fiction/page/%d/", "/genre/sci-fi/page/%d/", "/sci-fi/page/%d/", "/category/sci-fi/page/%d/") to "Sci-Fi",
         paths("/genre/thriller/page/%d/", "/thriller/page/%d/", "/category/thriller/page/%d/") to "Thriller"
     )
 
