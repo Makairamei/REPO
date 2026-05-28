@@ -465,7 +465,7 @@ internal object PutarFlixExtractor {
                 app.get(
                     url = url,
                     referer = referer,
-                    timeout = REQUEST_TIMEOUT_MS.toInt()
+                    timeout = REQUEST_TIMEOUT_MS
                 ).document
             }.getOrNull()
         }
@@ -477,7 +477,7 @@ internal object PutarFlixExtractor {
                 app.post(
                     url = url,
                     referer = referer,
-                    timeout = REQUEST_TIMEOUT_MS.toInt(),
+                    timeout = REQUEST_TIMEOUT_MS,
                     headers = mapOf(
                         "X-Requested-With" to "XMLHttpRequest",
                         "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
