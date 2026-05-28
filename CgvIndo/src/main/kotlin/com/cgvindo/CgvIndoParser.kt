@@ -58,7 +58,7 @@ object CgvIndoParser {
         if (!CgvIndoUtils.isTitleUrl(href)) return null
 
         val image = anchor.selectFirst("img") ?: element.selectFirst("img")
-        val poster = CgvIndoUtils.pickImage(api.mainUrl, image, element)
+        val poster = CgvIndoUtils.pickImage(api.mainUrl, image, element) ?: return null
         val rawTitle = listOf(
             anchor.attr("title"),
             image?.attr("alt").orEmpty(),

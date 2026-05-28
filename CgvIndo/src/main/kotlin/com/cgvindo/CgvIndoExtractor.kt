@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import java.net.URLEncoder
@@ -19,15 +20,22 @@ import org.jsoup.nodes.Document
 
 object CgvIndoExtractor {
     private const val TAG = "CgvIndo"
-    private const val MAX_HOPS = 3
+    private const val MAX_HOPS = 5
     private const val MAX_DIRECT = 24
-    private const val MAX_EMBED = 18
+    private const val MAX_EMBED = 32
     private const val MAX_AJAX_PROBES = 36
 
     private val keyValueRegex = Regex(
         """(?i)(?:file|src|url|source|hls|hlsUrl|video|videoUrl|stream|streamUrl|playlist|embed|iframe|link|fileUrl)\s*[:=]\s*['\"]([^'\"]+)['\"]"""
     )
     private val quotedUrlRegex = Regex("""(?i)['\"]((?:https?:)?//[^'\"<>\s]+|/[^'\"<>\s]+)['\"]""")
+    private val bareMediaRegex = Regex(
+        """(?i)(?:https?:)?//[^\s'\"<>]+?(?:m3u8|mp4|videoplayback|get_video|master|playlist)[^\s'\"<>]*"""
+    )
+    private val packedEvalRegex = Regex(
+        """eval\s*\(\s*function\s*\(p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*(?:r|d)\s*\).*?\}\s*\(\s*['"](.*?)['"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['"](.*?)['"]\.split\s*\(\s*['"]\|['"]\s*\)""",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+    )
     private val iframeRegex = Regex("""(?i)<iframe[^>]+src\s*=\s*['\"]([^'\"]+)['\"]""")
     private val encodedUrlRegex = Regex("""https?%3A%2F%2F[^'\"<>\s]+""", RegexOption.IGNORE_CASE)
     private val atobRegex = Regex("""(?i)atob\s*\(\s*['\"]([A-Za-z0-9+/=_-]{16,})['\"]\s*\)""")
@@ -89,7 +97,8 @@ object CgvIndoExtractor {
 
         for (embed in embeds.filterNot { direct.contains(it) }.take(MAX_EMBED)) {
             Log.e(TAG, "embed candidate: $embed")
-            val extractorFound = runExtractor(embed, pageUrl, emitted, subtitleCallback, callback)
+            val customFound = runCustomHostExtractor(providerName, embed, pageUrl, emitted, subtitleCallback, callback)
+            val extractorFound = customFound || runExtractor(embed, pageUrl, emitted, subtitleCallback, callback)
             found = found || extractorFound
             if (!extractorFound && canRecurseInto(embed, pageUrl, depth)) {
                 found = resolvePage(providerName, mainUrl, embed, pageUrl, depth + 1, emitted, subtitleCallback, callback) || found
@@ -216,6 +225,17 @@ object CgvIndoExtractor {
             when (value) {
                 is String -> ajaxPayloadUrls(pageUrl, value).forEach { out.add(it) }
                 is JSONObject -> collectJson(pageUrl, value, out)
+                is JSONArray -> collectJsonArray(pageUrl, value, out)
+            }
+        }
+    }
+
+    private fun collectJsonArray(pageUrl: String, array: JSONArray, out: MutableSet<String>) {
+        for (i in 0 until array.length()) {
+            when (val value = array.opt(i)) {
+                is String -> ajaxPayloadUrls(pageUrl, value).forEach { out.add(it) }
+                is JSONObject -> collectJson(pageUrl, value, out)
+                is JSONArray -> collectJsonArray(pageUrl, value, out)
             }
         }
     }
@@ -251,6 +271,113 @@ object CgvIndoExtractor {
         }
     }
 
+
+    private suspend fun runCustomHostExtractor(
+        providerName: String,
+        url: String,
+        referer: String,
+        emitted: MutableSet<String>,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val low = url.lowercase()
+        return when {
+            low.contains("dood.") || low.contains("doodstream") || low.contains("doodwatch") ->
+                extractDood(providerName, url, referer, emitted, callback)
+            low.contains("streamtape") || low.contains("stape") ->
+                extractStreamTape(providerName, url, referer, emitted, callback)
+            low.contains("filemoon") || low.contains("vidhide") || low.contains("vidguard") ||
+                low.contains("streamwish") || low.contains("filelions") || low.contains("streamruby") ||
+                low.contains("uqload") || low.contains("voe") || low.contains("mp4upload") ->
+                extractPackedPlayer(providerName, url, referer, emitted, subtitleCallback, callback)
+            else -> false
+        }
+    }
+
+    private suspend fun extractPackedPlayer(
+        providerName: String,
+        url: String,
+        referer: String,
+        emitted: MutableSet<String>,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val html = runCatching { app.get(url, headers = CgvIndoUtils.siteHeaders, referer = referer).text }
+            .onFailure { Log.e(TAG, "custom packed GET failed $url: ${it.message}") }
+            .getOrNull() ?: return false
+        val normalized = CgvIndoUtils.decodeMaybe(html).replace("&lt;", "<").replace("&gt;", ">")
+        val candidates = prioritizeCandidates(
+            extractUrlsFromHtml(url, normalized) +
+                unpackPackedScripts(normalized).flatMap { extractUrlsFromHtml(url, it) }
+        )
+        var found = false
+        for (candidate in candidates.take(24)) {
+            val directFound = emitDirect(providerName, candidate, url, emitted, callback)
+            val extractorFound = if (!directFound && looksLikeEmbed(candidate)) runExtractor(candidate, url, emitted, subtitleCallback, callback) else false
+            found = found || directFound || extractorFound
+        }
+        Log.e(TAG, "custom packed host result found=$found url=$url candidates=${candidates.take(8)}")
+        return found
+    }
+
+    private suspend fun extractStreamTape(
+        providerName: String,
+        url: String,
+        referer: String,
+        emitted: MutableSet<String>,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val html = runCatching { app.get(url, headers = CgvIndoUtils.siteHeaders, referer = referer).text }
+            .onFailure { Log.e(TAG, "streamtape GET failed $url: ${it.message}") }
+            .getOrNull() ?: return false
+        val direct = linkedSetOf<String>()
+        Regex("""(?i)(?:https?:)?//[^'\"<>\s]+?/get_video\?[^'\"<>\s]+""")
+            .findAll(CgvIndoUtils.decodeMaybe(html))
+            .mapNotNull { normalizeUrl(url, it.value) }
+            .forEach { direct.add(it) }
+        var found = false
+        direct.forEach { finalUrl ->
+            if (emitted.add(finalUrl)) {
+                callback(newExtractorLink(providerName, "$providerName StreamTape", finalUrl) {
+                    this.referer = url
+                    this.quality = Qualities.Unknown.value
+                    this.headers = CgvIndoUtils.videoHeaders(url)
+                })
+                found = true
+            }
+        }
+        return found
+    }
+
+    private suspend fun extractDood(
+        providerName: String,
+        url: String,
+        referer: String,
+        emitted: MutableSet<String>,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val origin = CgvIndoUtils.originOf(url) ?: return false
+        val html = runCatching { app.get(url, headers = CgvIndoUtils.siteHeaders, referer = referer).text }
+            .onFailure { Log.e(TAG, "dood GET failed $url: ${it.message}") }
+            .getOrNull() ?: return false
+        val passPath = Regex("""(/pass_md5/[^'\"<>\s]+)""").find(html)?.groupValues?.getOrNull(1) ?: return false
+        val token = Regex("""token=([^&'\"<>\s]+)""").find(passPath)?.groupValues?.getOrNull(1).orEmpty()
+        val seed = runCatching { app.get(origin.trimEnd('/') + passPath, headers = CgvIndoUtils.videoHeaders(url), referer = url).text }
+            .getOrNull()
+            ?.takeIf { it.startsWith("http", ignoreCase = true) } ?: return false
+        val random = (1..10).joinToString("") { ('a'..'z').random().toString() }
+        val finalUrl = seed + random + if (token.isNotBlank()) "?token=$token&expiry=${System.currentTimeMillis()}" else ""
+        if (emitted.add(finalUrl)) {
+            callback(newExtractorLink(providerName, "$providerName Dood", finalUrl) {
+                this.referer = url
+                this.quality = Qualities.Unknown.value
+                this.headers = CgvIndoUtils.videoHeaders(url)
+            })
+            return true
+        }
+        return false
+    }
+
     private suspend fun runExtractor(url: String, referer: String, emitted: MutableSet<String>, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         var found = false
         return try {
@@ -282,9 +409,11 @@ object CgvIndoExtractor {
         val html = normalizedHtml(document)
         keyValueRegex.findAll(html).mapNotNull { normalizeUrl(pageUrl, it.groupValues[1]) }.filter { looksLikeMediaOrPlayer(it) }.forEach { out.add(it) }
         quotedUrlRegex.findAll(html).mapNotNull { normalizeUrl(pageUrl, it.groupValues[1]) }.filter { looksLikeDirectOrHls(it) }.forEach { out.add(it) }
+        bareMediaRegex.findAll(html).mapNotNull { normalizeUrl(pageUrl, it.value) }.filter { looksLikeMediaOrPlayer(it) }.forEach { out.add(it) }
         iframeRegex.findAll(html).mapNotNull { normalizeUrl(pageUrl, it.groupValues[1]) }.filter { looksLikeDirectOrHls(it) }.forEach { out.add(it) }
         encodedUrlRegex.findAll(html).mapNotNull { normalizeUrl(pageUrl, it.value) }.filter { looksLikeMediaOrPlayer(it) }.forEach { out.add(it) }
         decodeBase64Candidates(html).mapNotNull { normalizeUrl(pageUrl, it) }.filter { looksLikeMediaOrPlayer(it) }.forEach { out.add(it) }
+        unpackPackedScripts(html).flatMap { extractUrlsFromHtml(pageUrl, it) }.filter { looksLikeMediaOrPlayer(it) }.forEach { out.add(it) }
         return out.distinct()
     }
 
@@ -350,6 +479,26 @@ object CgvIndoExtractor {
         return out.toList()
     }
 
+
+    private fun unpackPackedScripts(html: String): List<String> {
+        return packedEvalRegex.findAll(html).mapNotNull { match ->
+            runCatching {
+                val payload = match.groupValues[1]
+                val radix = match.groupValues[2].toInt()
+                val count = match.groupValues[3].toInt()
+                val words = match.groupValues[4].split('|')
+                var decoded = payload
+                for (i in count - 1 downTo 0) {
+                    val word = words.getOrNull(i).orEmpty()
+                    if (word.isNotEmpty()) {
+                        decoded = Regex("\\b${i.toString(radix)}\\b").replace(decoded, word)
+                    }
+                }
+                CgvIndoUtils.decodeMaybe(decoded)
+            }.getOrNull()
+        }.toList()
+    }
+
     private fun prioritizeCandidates(list: List<String>): List<String> = list.distinct().sortedWith(
         compareByDescending<String> { looksLikeDirectOrHls(it) }
             .thenByDescending { knownHost(it) }
@@ -374,7 +523,7 @@ object CgvIndoExtractor {
         val low = url.lowercase()
         return listOf(
             "streamtape", "dood", "doodstream", "filemoon", "vidhide", "vidguard", "streamwish", "filelions", "streamruby",
-            "mp4upload", "upstream", "mixdrop", "streamsb", "sbembed", "luluvdo", "voe", "uqload", "short.ink", "hydrax", "streamvid"
+            "mp4upload", "upstream", "mixdrop", "streamsb", "sbembed", "luluvdo", "voe", "uqload", "short.ink", "hydrax", "streamvid", "streamhide", "filegram", "fileditch", "vidmoly"
         ).any { it in low }
     }
 

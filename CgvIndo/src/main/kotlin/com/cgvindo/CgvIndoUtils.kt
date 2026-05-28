@@ -42,6 +42,12 @@ object CgvIndoUtils {
         "dmca", "privacy-policy", "contact", "about", "jadwal", "ongoing", "completed"
     )
 
+    private val imageAttributes = listOf(
+        "data-src", "data-lazy-src", "data-original", "data-cfsrc", "data-srcset",
+        "data-large_image", "data-full", "data-bg", "data-background", "data-cover",
+        "srcset", "src"
+    )
+
     fun cleanText(value: String?): String = value.orEmpty()
         .replace("\u00a0", " ")
         .replace(Regex("\\s+"), " ")
@@ -53,6 +59,7 @@ object CgvIndoUtils {
             .replace(Regex("(?i)^trailer\\s*[:|-]?\\s*"), "")
             .replace(Regex("(?i)\\s*[-|]\\s*(CGVIndo|Nonton|Streaming).*$"), "")
             .replace(Regex("(?i)^nonton\\s+"), "")
+            .replace(Regex("(?i)^film\\s+"), "")
             .replace(Regex("(?i)\\s+sub\\s+indo$"), " Sub")
             .trim(' ', '-', '|')
     }
@@ -158,10 +165,11 @@ object CgvIndoUtils {
         val candidates = linkedSetOf<String>()
         fun add(value: String?) { if (!value.isNullOrBlank()) candidates.add(value) }
         if (image != null) {
-            listOf("data-src", "data-lazy-src", "data-original", "data-cfsrc", "data-srcset", "srcset", "src").forEach { add(image.attr(it)) }
+            imageAttributes.forEach { add(image.attr(it)) }
         }
-        container?.select("img, source")?.forEach { img ->
-            listOf("data-src", "data-lazy-src", "data-original", "data-cfsrc", "data-srcset", "srcset", "src").forEach { add(img.attr(it)) }
+        container?.select("img, source, [style]")?.forEach { img ->
+            imageAttributes.forEach { add(img.attr(it)) }
+            Regex("(?i)url\\(([^)]+)\\)").findAll(img.attr("style")).forEach { add(it.groupValues[1]) }
         }
         container?.attr("style")?.let { style ->
             Regex("(?i)url\\(([^)]+)\\)").findAll(style).forEach { add(it.groupValues[1]) }
@@ -184,34 +192,76 @@ object CgvIndoUtils {
         val titleTokens = cleanTitle(title).lowercase().split(Regex("[^a-z0-9]+"))
             .filter { it.length >= 3 }
             .toSet()
-        val candidates = linkedSetOf<String>()
+
+        data class PosterCandidate(val raw: String, val context: String, val priority: Int)
+
+        val candidates = mutableListOf<PosterCandidate>()
+        fun add(raw: String?, context: String, priority: Int) {
+            if (!raw.isNullOrBlank()) candidates.add(PosterCandidate(raw, context, priority))
+        }
+
+        doc.select(
+            ".poster img, .thumb img, .cover img, .featured img, .wp-post-image, " +
+                "article img, .entry-content img, .single img"
+        ).forEach { img ->
+            val context = listOf(img.attr("alt"), img.attr("title"), img.parent()?.text().orEmpty(), img.className(), img.id()).joinToString(" ")
+            imageAttributes.forEach { add(img.attr(it), context, 30) }
+            Regex("(?i)url\\(([^)]+)\\)").findAll(img.attr("style")).forEach { add(it.groupValues[1], context, 30) }
+        }
+
+        doc.select("[style]").forEach { el ->
+            val context = listOf(el.text(), el.className(), el.id()).joinToString(" ")
+            Regex("(?i)url\\(([^)]+)\\)").findAll(el.attr("style")).forEach { add(it.groupValues[1], context, 15) }
+        }
+
         listOf(
             "meta[property=og:image]", "meta[name=twitter:image]", "meta[property=twitter:image]"
-        ).forEach { sel -> doc.selectFirst(sel)?.attr("content")?.let { candidates.add(it) } }
-        doc.select("article img, .entry-content img, .poster img, .thumb img, .cover img, .single img, img").forEach { img ->
-            listOf("data-src", "data-lazy-src", "data-original", "data-cfsrc", "srcset", "src").forEach { attr ->
-                img.attr(attr).takeIf { it.isNotBlank() }?.let { candidates.add(it) }
-            }
-        }
+        ).forEach { sel -> doc.selectFirst(sel)?.attr("content")?.let { add(it, "meta", 2) } }
+
         return candidates.asSequence()
-            .flatMap { srcsetValues(it).asSequence() }
-            .mapNotNull { absoluteUrl(base, it) }
-            .map { upscalePosterUrl(it) }
-            .filter { isValidPoster(it) }
-            .sortedByDescending { posterScore(it, titleTokens) }
+            .flatMap { candidate ->
+                srcsetValues(candidate.raw).asSequence().map { candidate.copy(raw = it) }
+            }
+            .mapNotNull { candidate ->
+                absoluteUrl(base, candidate.raw)?.let { candidate.copy(raw = upscalePosterUrl(it)) }
+            }
+            .filter { isValidPoster(it.raw) }
+            .sortedByDescending { posterScore(it.raw, titleTokens) + contextScore(it.context, titleTokens) + it.priority }
             .firstOrNull()
+            ?.raw
     }
 
     fun extractMetaImage(base: String, doc: Document): String? = extractDetailPoster(base, doc, doc.title())
 
     private fun posterScore(url: String, tokens: Set<String>): Int {
         val low = url.lowercase()
+        val path = runCatching { URI(url).path.orEmpty().lowercase() }.getOrDefault(low)
         var score = 0
-        tokens.forEach { if (it in low) score += 6 }
-        if ("wp-content/uploads" in low) score += 5
-        if ("poster" in low || "cover" in low || "thumb" in low) score += 3
-        if ("logo" in low || "favicon" in low || "placeholder" in low) score -= 20
+        tokens.forEach { if (it in path) score += 8 }
+        if ("wp-content/uploads" in path) score += 8
+        if ("poster" in path || "cover" in path || "thumb" in path || "image" in path) score += 4
+        if (isBrandingImage(path)) score -= 100
         return score
+    }
+
+    private fun contextScore(context: String, tokens: Set<String>): Int {
+        val low = context.lowercase()
+        var score = 0
+        tokens.forEach { if (it in low) score += 7 }
+        if ("poster" in low || "cover" in low || "thumb" in low || "featured" in low) score += 5
+        if ("logo" in low || "brand" in low || "site" in low) score -= 20
+        return score
+    }
+
+    private fun isBrandingImage(pathOrUrl: String): Boolean {
+        val fileName = pathOrUrl.substringAfterLast('/').lowercase()
+        return listOf(
+            "logo", "favicon", "placeholder", "no-image", "default", "blank", "sprite", "loader",
+            "cgvindo", "cropped", "header", "banner"
+        ).any { it in fileName } ||
+            "/themes/" in pathOrUrl ||
+            "/plugins/" in pathOrUrl ||
+            "/uploads/elementor/" in pathOrUrl
     }
 
     fun upscalePosterUrl(url: String): String {
