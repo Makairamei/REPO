@@ -597,7 +597,7 @@ object Nonton01Extractor {
                 miniDoc.select("iframe[src], embed[src], video[src], source[src], a[href], [data-src], [data-url], [data-file], [data-embed], [data-iframe], [data-hls], [data-m3u8], [data-html], [srcdoc]").forEach { element ->
                     listOf("src", "href", "data-src", "data-url", "data-file", "data-embed", "data-iframe", "data-hls", "data-m3u8", "data-html", "srcdoc")
                         .map { element.attr(it) }
-                        .flatMap { attr -> if (attr.contains("<") || attr.contains("http", true) || attr.contains("\/")) extractUrlsFromText(pageUrl, attr) else listOfNotNull(normalizeUrl(pageUrl, attr)) }
+                        .flatMap { attr -> if (attr.contains("<") || attr.contains("http", true) || attr.contains("\\/")) extractUrlsFromText(pageUrl, attr) else listOfNotNull(normalizeUrl(pageUrl, attr)) }
                         .forEach { out.add(it) }
                 }
             }.onFailure { Log.e(TAG, "mini HTML parse failed: ${it.message}") }
