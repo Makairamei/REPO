@@ -2,6 +2,16 @@ package com.cgvindo
 
 import android.util.Base64
 import android.util.Log
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.lagradost.cloudstream3.USER_AGENT
+import com.lagradost.cloudstream3.extractors.StreamWishExtractor
+import com.lagradost.cloudstream3.extractors.VidStack
+import com.lagradost.cloudstream3.utils.ExtractorApi
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.HlsPlaylistParser
+import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.utils.getAndUnpack
+import com.lagradost.cloudstream3.utils.getPacked
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.newSubtitleFile
@@ -628,14 +638,16 @@ object CgvIndoExtractor {
     private fun looksLikeMediaOrPlayer(url: String): Boolean = looksLikeDirectOrHls(url) || looksLikeEmbed(url) || knownHost(url)
     private fun looksLikeEmbed(url: String): Boolean {
         val low = url.lowercase()
-        return listOf("/embed", "/player", "iframe", "stream", "filemoon", "dood", "streamtape", "streamwish", "vidhide", "vidguard", "short.ink", "mp4upload").any { it in low }
+        return knownHost(low) || listOf("/embed", "/player", "iframe", "stream", "filemoon", "dood", "streamtape", "streamwish", "vidhide", "vidguard", "short.ink", "mp4upload").any { it in low }
     }
 
     private fun knownHost(url: String): Boolean {
         val low = url.lowercase()
         return listOf(
             "streamtape", "dood", "doodstream", "filemoon", "vidhide", "vidguard", "streamwish", "filelions", "streamruby",
-            "mp4upload", "upstream", "mixdrop", "streamsb", "sbembed", "luluvdo", "voe", "uqload", "short.ink", "hydrax", "streamvid", "streamhide", "filegram", "fileditch", "vidmoly"
+            "mp4upload", "upstream", "mixdrop", "streamsb", "sbembed", "luluvdo", "voe", "uqload", "short.ink", "hydrax", "streamvid", "streamhide", "filegram", "fileditch", "vidmoly",
+            "hglink", "hgcloud", "ghbrisk", "dhcplay", "streamcasthub", "dm21", "embed4me", "upns", "p2pplay", "4meplayer", "meplayer",
+            "dingtezuni", "dintezuvio", "minochinos", "mivalyo", "movearnpre", "ryderjet", "bingezove", "jeniusplay", "veev", "kinoger", "poophq"
         ).any { it in low }
     }
 
@@ -656,4 +668,310 @@ object CgvIndoExtractor {
             "doubleclick", "googletagmanager", "google-analytics", "ads", "analytics", "wp-content/themes", "wp-content/plugins"
         ).any { it in low }
     }
+}
+
+
+// Region: custom extractor layer adopted from working BetbetMiro providers.
+private fun fixCgvExtractorUrlSafe(url: String, baseUrl: String): String {
+    val cleanUrl = url.trim()
+        .replace("\\/", "/")
+        .replace("&amp;", "&")
+
+    return when {
+        cleanUrl.startsWith("http://", ignoreCase = true) ||
+            cleanUrl.startsWith("https://", ignoreCase = true) -> cleanUrl
+        cleanUrl.startsWith("//") -> "https:$cleanUrl"
+        cleanUrl.startsWith("/") -> baseUrl.trimEnd('/') + cleanUrl
+        else -> baseUrl.trimEnd('/') + "/" + cleanUrl.trimStart('/')
+    }
+}
+
+class Movearnpre : Dingtezuni() {
+    override var name = "Movearnpre"
+    override var mainUrl = "https://movearnpre.com"
+}
+
+class Minochinos : Dingtezuni() {
+    override var name = "Earnvids"
+    override var mainUrl = "https://minochinos.com"
+}
+
+class Mivalyo : Dingtezuni() {
+    override var name = "Earnvids"
+    override var mainUrl = "https://mivalyo.com"
+}
+
+class Ryderjet : Dingtezuni() {
+    override var name = "Ryderjet"
+    override var mainUrl = "https://ryderjet.com"
+}
+
+class Bingezove : Dingtezuni() {
+    override var name = "Earnvids"
+    override var mainUrl = "https://bingezove.com"
+}
+
+open class Dingtezuni : ExtractorApi() {
+    override val name = "Earnvids"
+    override val mainUrl = "https://dingtezuni.com"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val headers = mapOf(
+            "Sec-Fetch-Dest" to "empty",
+            "Sec-Fetch-Mode" to "cors",
+            "Sec-Fetch-Site" to "cross-site",
+            "Origin" to mainUrl,
+            "User-Agent" to USER_AGENT,
+        )
+
+        val response = app.get(getEmbedUrl(url), referer = referer)
+        val script = if (!getPacked(response.text).isNullOrEmpty()) {
+            var result = getAndUnpack(response.text)
+            if (result.contains("var links")) result = result.substringAfter("var links")
+            result
+        } else {
+            response.document.selectFirst("script:containsData(sources:)")?.data()
+        } ?: return
+
+        Regex(":\\s*\"(.*?m3u8.*?)\"").findAll(script).forEach { m3u8Match ->
+            val streamUrl = fixCgvExtractorUrlSafe(m3u8Match.groupValues[1], mainUrl)
+            generateM3u8(name, streamUrl, referer = "$mainUrl/", headers = headers).forEach(callback)
+        }
+    }
+
+    private fun getEmbedUrl(url: String): String {
+        return when {
+            url.contains("/d/") -> url.replace("/d/", "/v/")
+            url.contains("/download/") -> url.replace("/download/", "/v/")
+            url.contains("/file/") -> url.replace("/file/", "/v/")
+            else -> url.replace("/f/", "/v/")
+        }
+    }
+}
+
+class Hglink : StreamWishExtractor() {
+    override val name = "Hglink"
+    override val mainUrl = "https://hglink.to"
+}
+
+class Ghbrisk : StreamWishExtractor() {
+    override val name = "Ghbrisk"
+    override val mainUrl = "https://ghbrisk.com"
+}
+
+class Hgcloud : StreamWishExtractor() {
+    override val name = "Hgcloud"
+    override val mainUrl = "https://hgcloud.to"
+}
+
+class Dhcplay : StreamWishExtractor() {
+    override var name = "DHC Play"
+    override var mainUrl = "https://dhcplay.com"
+}
+
+class Streamcasthub : VidStack() {
+    override var name = "Streamcasthub"
+    override var mainUrl = "https://live.streamcasthub.store"
+    override var requiresReferer = true
+}
+
+class Dm21embed : VidStack() {
+    override var name = "Dm21embed"
+    override var mainUrl = "https://dm21.embed4me.vip"
+    override var requiresReferer = true
+}
+
+class Dm21upns : VidStack() {
+    override var name = "Dm21upns"
+    override var mainUrl = "https://dm21.upns.live"
+    override var requiresReferer = true
+}
+
+class Pm21p2p : VidStack() {
+    override var name = "Pm21p2p"
+    override var mainUrl = "https://pm21.p2pplay.pro"
+    override var requiresReferer = true
+}
+
+class Dm21 : VidStack() {
+    override var name = "Dm21"
+    override var mainUrl = "https://dm21.embed4me.vip"
+    override var requiresReferer = true
+}
+
+class Meplayer : VidStack() {
+    override var name = "Meplayer"
+    override var mainUrl = "https://video.4meplayer.com"
+    override var requiresReferer = true
+}
+
+open class Dintezuvio : Dingtezuni() {
+    override val name = "Earnvids"
+    override val mainUrl = "https://dintezuvio.com"
+}
+
+class Veev : ExtractorApi() {
+    override val name = "Veev"
+    override val mainUrl = "https://veev.to"
+    override val requiresReferer = false
+
+    private val pattern = Regex("""(?://|\.)(?:veev|kinoger|poophq|doods)\.(?:to|pw|com)/[ed]/([0-9A-Za-z]+)""")
+
+    companion object {
+        const val DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0"
+    }
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val mediaId = pattern.find(url)?.groupValues?.get(1) ?: return
+        val pageUrl = "$mainUrl/e/$mediaId"
+
+        val html = app.get(pageUrl, headers = mapOf("User-Agent" to DEFAULT_UA)).text
+        val encRegex = Regex("""[.\s'](?:fc|_vvto\[[^]]*)(?:['\]]*)?\s*[:=]\s*['"]([^'"]+)""")
+        val foundValues = encRegex.findAll(html).map { it.groupValues[1] }.toList()
+        if (foundValues.isEmpty()) return
+
+        for (f in foundValues.reversed()) {
+            val ch = veevDecode(f)
+            if (ch == f) continue
+
+            val dlUrl = "$mainUrl/dl?op=player_api&cmd=gi&file_code=$mediaId&r=$mainUrl&ch=$ch&ie=1"
+            val responseText = app.get(dlUrl, headers = mapOf("User-Agent" to DEFAULT_UA)).text
+
+            val json = runCatching { JSONObject(responseText) }.getOrNull() ?: continue
+            val file = json.optJSONObject("file") ?: continue
+            if (file.optString("file_status") != "OK") continue
+
+            val dv = file.getJSONArray("dv").getJSONObject(0).getString("s")
+            val decoded = decodeUrl(veevDecode(dv), buildArray(ch).firstOrNull().orEmpty())
+
+            callback.invoke(
+                newExtractorLink(name, name, decoded, INFER_TYPE) {
+                    this.referer = mainUrl
+                    this.quality = Qualities.Unknown.value
+                }
+            )
+            return
+        }
+    }
+
+    fun String.toExoPlayerMimeType(): String {
+        return when (this.lowercase()) {
+            "video/x-matroska", "video/webm" -> HlsPlaylistParser.MimeTypes.VIDEO_MATROSKA
+            "video/mp4" -> HlsPlaylistParser.MimeTypes.VIDEO_MP4
+            "application/x-mpegurl", "application/vnd.apple.mpegurl" -> HlsPlaylistParser.MimeTypes.APPLICATION_M3U8
+            "video/avi" -> HlsPlaylistParser.MimeTypes.VIDEO_AVI
+            else -> ""
+        }
+    }
+
+    private fun veevDecode(etext: String): String {
+        if (etext.isEmpty()) return etext
+        val result = StringBuilder()
+        val lut = HashMap<Int, String>()
+        var n = 256
+        var c = etext[0].toString()
+        result.append(c)
+        for (char in etext.drop(1)) {
+            val code = char.code
+            val nc = if (code < 256) char.toString() else lut[code] ?: (c + c[0])
+            result.append(nc)
+            lut[n++] = c + nc[0]
+            c = nc
+        }
+        return result.toString()
+    }
+
+    private fun jsInt(x: Char): Int = x.digitToIntOrNull() ?: 0
+
+    private fun buildArray(encoded: String): List<List<Int>> {
+        val result = mutableListOf<List<Int>>()
+        val it = encoded.iterator()
+        fun nextIntOrZero(): Int = if (it.hasNext()) jsInt(it.nextChar()) else 0
+        var count = nextIntOrZero()
+        while (count != 0) {
+            val row = mutableListOf<Int>()
+            repeat(count) { row.add(nextIntOrZero()) }
+            result.add(row.reversed())
+            count = nextIntOrZero()
+        }
+        return result
+    }
+
+    private fun decodeUrl(encoded: String, rules: List<Int>): String {
+        var text = encoded
+        for (r in rules) {
+            if (r == 1) text = text.reversed()
+            val arr = text.chunked(2).mapNotNull { it.toIntOrNull(16)?.toByte() }.toByteArray()
+            text = arr.toString(Charsets.UTF_8).replace("dXRmOA==", "")
+        }
+        return text
+    }
+}
+
+class Jeniusplay : ExtractorApi() {
+    override var name = "Jeniusplay"
+    override var mainUrl = "https://jeniusplay.com"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val document = app.get(url, referer = referer).document
+        val hash = url.split("/").last().substringAfter("data=")
+
+        val m3uLink = runCatching {
+            val response = app.post(
+                url = "$mainUrl/player/index.php?data=$hash&do=getVideo",
+                data = mapOf("hash" to hash, "r" to referer.orEmpty()),
+                referer = referer,
+                headers = mapOf("X-Requested-With" to "XMLHttpRequest")
+            ).text
+            JSONObject(response).optString("videoSource").takeIf { it.isNotBlank() }
+        }.getOrNull()
+
+        if (m3uLink != null) {
+            callback.invoke(newExtractorLink(name, name, m3uLink, ExtractorLinkType.M3U8))
+        }
+
+        document.select("script").forEach { script ->
+            if (script.data().contains("eval(function(p,a,c,k,e,d)")) {
+                val subData = getAndUnpack(script.data()).substringAfter("\"tracks\":[").substringBefore("],")
+                runCatching { JSONArray("[$subData]") }.getOrNull()?.let { array ->
+                    for (i in 0 until array.length()) {
+                        val subtitle = array.optJSONObject(i) ?: continue
+                        val file = subtitle.optString("file")
+                        val label = subtitle.optString("label")
+                        if (file.isNotBlank()) subtitleCallback.invoke(newSubtitleFile(getLanguage(label), file))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getLanguage(str: String): String {
+        return when {
+            str.contains("indonesia", true) || str.contains("bahasa", true) -> "Indonesian"
+            else -> str
+        }
+    }
+
+    data class JeniusResponseSource(
+        @param:JsonProperty("hls") val hls: Boolean,
+        @param:JsonProperty("videoSource") val videoSource: String,
+        @param:JsonProperty("securedLink") val securedLink: String?,
+    )
 }
