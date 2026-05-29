@@ -130,10 +130,7 @@ class BondageValley : MainAPI() {
         "$mainUrl/videos/category/952" to "Lil Missy UK Store",
         "$mainUrl/videos/category/953" to "ZHUA",
         "$mainUrl/videos/category/954" to "Bondage Kitties",
-        "$mainUrl/videos/category/955" to "That Fetish Girl",
-        "$mainUrl/videos/category/956" to "My Bondage Girl",
-        "$mainUrl/videos/category/957" to "Mila Amora Bondage",
-        "$mainUrl/videos/category/958" to "Bondage Land"
+        "$mainUrl/videos/category/955" to "That Fetish Girl"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
