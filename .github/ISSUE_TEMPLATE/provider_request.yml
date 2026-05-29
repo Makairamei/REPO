@@ -1,0 +1,42 @@
+name: Request provider baru
+description: Minta penambahan provider baru.
+title: "[Request Provider]: "
+labels: ["provider-request", "enhancement"]
+body:
+  - type: input
+    id: provider_name
+    attributes:
+      label: Nama provider
+      placeholder: "Contoh: DuniaFilm21"
+    validations:
+      required: true
+
+  - type: input
+    id: source_url
+    attributes:
+      label: URL sumber
+      placeholder: "https://contoh.com/"
+    validations:
+      required: true
+
+  - type: textarea
+    id: categories
+    attributes:
+      label: Kategori yang diharapkan
+      description: Tulis kategori penting jika ada. Kalau kosong, kategori akan disesuaikan dengan website sumber.
+      placeholder: "Movie, Series, Anime, Genre, Tahun, Negara, dll."
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Catatan tambahan
+      placeholder: "Contoh: website pakai server 1/2/3, perlu subtitle, domain mirror, dll."
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: URL sumber bisa dibuka.
+        - label: Website memiliki konten yang bisa diuji.
+        - label: Saya paham provider baru belum tentu langsung stabil jika sumber memakai proteksi berat.

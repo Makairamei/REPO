@@ -1,0 +1,91 @@
+name: Provider bermasalah
+description: Laporkan provider yang error, tidak muncul, atau tidak bisa memutar video.
+title: "[Provider]: "
+labels: ["provider", "bug", "needs-triage"]
+body:
+  - type: input
+    id: provider
+    attributes:
+      label: Nama provider
+      description: Tulis nama provider yang bermasalah.
+      placeholder: "Contoh: Anichin, Nonton01, PutarFlix"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: problem_type
+    attributes:
+      label: Jenis masalah
+      description: Pilih jenis masalah yang terjadi.
+      multiple: true
+      options:
+        - Search kosong
+        - Homepage/kategori kosong
+        - Detail/load tidak terbuka
+        - Video tidak bisa diputar
+        - loadLinks false / 0 link
+        - Link video gagal dimuat
+        - Subtitle error
+        - Build/compile error
+        - Domain mati / redirect salah
+        - Lainnya
+    validations:
+      required: true
+
+  - type: input
+    id: source_url
+    attributes:
+      label: URL sumber atau contoh judul
+      description: Berikan link halaman sumber atau judul film/anime yang gagal.
+      placeholder: "https://contoh.com/judul-film/"
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Langkah reproduksi
+      description: Jelaskan langkah sampai error muncul.
+      value: |
+        1. Buka provider ...
+        2. Search ...
+        3. Pilih judul ...
+        4. Tekan play ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Hasil yang diharapkan
+      placeholder: "Video bisa diputar normal / hasil search muncul / kategori terbuka."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Hasil yang terjadi
+      placeholder: "Loading terus, 0 link, error extractor, blank page, atau crash."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log atau screenshot
+      description: Tempel log provider-test/GitHub Actions/Cloudstream jika ada.
+      render: text
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Versi Cloudstream / device
+      placeholder: "Contoh: Cloudstream 4.x, Android 15"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: Saya sudah mencoba provider lain untuk memastikan masalah bukan koneksi.
+        - label: Saya sudah menyertakan contoh judul atau URL yang bermasalah.
+        - label: Saya sudah menyertakan log/screenshot jika tersedia.
