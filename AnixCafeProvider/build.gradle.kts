@@ -1,10 +1,10 @@
 // use an integer for version numbers
-version = 2
+version = 3
 
 cloudstream {
     language = "id"
     authors = listOf("BetbetMiro")
-    description = "AnixCafe / Anixverse donghua provider with source-backed categories and playback resolver"
+    description = "AnixCafe / Anixverse donghua provider with safer core categories and guarded playback resolver"
 
     /**
      * Status int as the following:

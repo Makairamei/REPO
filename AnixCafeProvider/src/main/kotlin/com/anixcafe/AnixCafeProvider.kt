@@ -23,85 +23,18 @@ class AnixCafeProvider : MainAPI() {
         "$mainUrl/anime/?order=update&status=&type=&page=%d" to "Pembaruan Terbaru",
         "$mainUrl/anime/?order=added&status=&type=&page=%d" to "Terbaru Ditambahkan",
         "$mainUrl/anime/?order=popular&status=&type=&page=%d" to "Populer",
-        "$mainUrl/anime/?order=rating&status=&type=&page=%d" to "Rating",
         "$mainUrl/anime/?order=update&status=ongoing&type=&page=%d" to "Ongoing",
         "$mainUrl/anime/?order=update&status=completed&type=&page=%d" to "Completed",
-        "$mainUrl/anime/?order=update&status=upcoming&type=&page=%d" to "Upcoming",
-        "$mainUrl/anime/?order=update&status=hiatus&type=&page=%d" to "Hiatus",
-        "$mainUrl/anime/?order=update&status=&type=tv&page=%d" to "TV Series",
         "$mainUrl/anime/?order=update&status=&type=movie&page=%d" to "Movie",
         "$mainUrl/anime/?order=update&status=&type=ova&page=%d" to "OVA",
-        "$mainUrl/anime/?order=update&status=&type=live-action&page=%d" to "Live Action",
-        "$mainUrl/anime/?order=update&status=&type=special&page=%d" to "Special",
-        "$mainUrl/anime/?order=update&status=&type=bd&page=%d" to "BD",
-        "$mainUrl/anime/?order=update&status=&type=ona&page=%d" to "ONA",
-        "$mainUrl/anime/?order=update&status=&type=music&page=%d" to "Music",
         "$mainUrl/genres/action/page/%d/" to "Action",
-        "$mainUrl/genres/adult-cast/page/%d/" to "Adult Cast",
         "$mainUrl/genres/adventure/page/%d/" to "Adventure",
-        "$mainUrl/genres/apocalypse/page/%d/" to "Apocalypse",
-        "$mainUrl/genres/boys-love/page/%d/" to "Boys Love",
-        "$mainUrl/genres/childcare/page/%d/" to "Childcare",
-        "$mainUrl/genres/combat-sports/page/%d/" to "Combat Sports",
         "$mainUrl/genres/comedy/page/%d/" to "Comedy",
-        "$mainUrl/genres/demons/page/%d/" to "Demons",
-        "$mainUrl/genres/detective/page/%d/" to "Detective",
         "$mainUrl/genres/drama/page/%d/" to "Drama",
-        "$mainUrl/genres/ecchi/page/%d/" to "Ecchi",
-        "$mainUrl/genres/family/page/%d/" to "Family",
         "$mainUrl/genres/fantasy/page/%d/" to "Fantasy",
-        "$mainUrl/genres/food/page/%d/" to "Food",
-        "$mainUrl/genres/friendship/page/%d/" to "Friendship",
-        "$mainUrl/genres/game/page/%d/" to "Game",
-        "$mainUrl/genres/gender-bender/page/%d/" to "Gender Bender",
-        "$mainUrl/genres/gore/page/%d/" to "Gore",
-        "$mainUrl/genres/gourmet/page/%d/" to "Gourmet",
-        "$mainUrl/genres/harem/page/%d/" to "Harem",
-        "$mainUrl/genres/hentai/page/%d/" to "Hentai",
-        "$mainUrl/genres/historical/page/%d/" to "Historical",
-        "$mainUrl/genres/horror/page/%d/" to "Horror",
-        "$mainUrl/genres/isekai/page/%d/" to "Isekai",
-        "$mainUrl/genres/iyashikei/page/%d/" to "Iyashikei",
-        "$mainUrl/genres/kids/page/%d/" to "Kids",
-        "$mainUrl/genres/magic/page/%d/" to "Magic",
-        "$mainUrl/genres/mahou-shoujo/page/%d/" to "Mahou Shoujo",
         "$mainUrl/genres/martial-arts/page/%d/" to "Martial Arts",
-        "$mainUrl/genres/mecha/page/%d/" to "Mecha",
-        "$mainUrl/genres/military/page/%d/" to "Military",
-        "$mainUrl/genres/music/page/%d/" to "Music",
-        "$mainUrl/genres/mystery/page/%d/" to "Mystery",
-        "$mainUrl/genres/mythology/page/%d/" to "Mythology",
-        "$mainUrl/genres/organized-crime/page/%d/" to "Organized Crime",
-        "$mainUrl/genres/parody/page/%d/" to "Parody",
-        "$mainUrl/genres/political/page/%d/" to "Political",
-        "$mainUrl/genres/psychological/page/%d/" to "Psychological",
-        "$mainUrl/genres/regression/page/%d/" to "Regression",
-        "$mainUrl/genres/reincarnation/page/%d/" to "Reincarnation",
         "$mainUrl/genres/romance/page/%d/" to "Romance",
-        "$mainUrl/genres/samurai/page/%d/" to "Samurai",
-        "$mainUrl/genres/school/page/%d/" to "School",
-        "$mainUrl/genres/sci-fi/page/%d/" to "Sci-Fi",
-        "$mainUrl/genres/seinen/page/%d/" to "Seinen",
-        "$mainUrl/genres/shoujo/page/%d/" to "Shoujo",
-        "$mainUrl/genres/shounen/page/%d/" to "Shounen",
-        "$mainUrl/genres/shounen-ai/page/%d/" to "Shounen Ai",
-        "$mainUrl/genres/slice-of-life/page/%d/" to "Slice of Life",
-        "$mainUrl/genres/space/page/%d/" to "Space",
-        "$mainUrl/genres/sports/page/%d/" to "Sports",
-        "$mainUrl/genres/strategy-game/page/%d/" to "Strategy Game",
-        "$mainUrl/genres/super-power/page/%d/" to "Super Power",
-        "$mainUrl/genres/supernatural/page/%d/" to "Supernatural",
-        "$mainUrl/genres/survival/page/%d/" to "Survival",
-        "$mainUrl/genres/suspense/page/%d/" to "Suspense",
-        "$mainUrl/genres/team-sports/page/%d/" to "Team Sports",
-        "$mainUrl/genres/thriller/page/%d/" to "Thriller",
-        "$mainUrl/genres/time-travel/page/%d/" to "Time Travel",
-        "$mainUrl/genres/tokusatsu/page/%d/" to "Tokusatsu",
-        "$mainUrl/genres/urban-fantasy/page/%d/" to "Urban Fantasy",
-        "$mainUrl/genres/video-game/page/%d/" to "Video Game",
-        "$mainUrl/genres/workplace/page/%d/" to "Workplace",
         "$mainUrl/genres/wuxia/page/%d/" to "Wuxia",
-        "$mainUrl/genres/yuri/page/%d/" to "Yuri"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -184,8 +117,14 @@ class AnixCafeProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data, referer = "$mainUrl/").document
-        val emitted = linkedSetOf<String>()
+        val visited = linkedSetOf<String>()
         val candidates = linkedSetOf<Pair<String, String>>()
+        var emitted = false
+
+        val safeCallback: (ExtractorLink) -> Unit = { link ->
+            emitted = true
+            callback(link)
+        }
 
         document.select("#pembed iframe[src], .player-embed iframe[src], .megavid iframe[src]").forEach { iframe ->
             iframe.attr("abs:src").ifBlank { iframe.attr("src") }
@@ -210,18 +149,22 @@ class AnixCafeProvider : MainAPI() {
                     url = AnixCafeExtractorHelper.normalizeUrl(url, data) ?: return@amap,
                     label = label,
                     referer = data,
-                    emitted = emitted,
+                    visited = visited,
                     subtitleCallback = subtitleCallback,
-                    callback = callback
+                    callback = safeCallback
                 )
             }
 
         document.select(".soraddlx a[href], .dlbox a[href], .download a[href], a[href*='mirrored.to'], a[href*='terabox']")
             .mapNotNull { it.attr("abs:href").ifBlank { it.attr("href") }.takeIf(String::isNotBlank) }
             .distinct()
-            .forEach { runCatching { loadExtractor(it, data, subtitleCallback, callback) } }
+            .forEach { url ->
+                runCatching {
+                    loadExtractor(url, data, subtitleCallback, safeCallback)
+                }
+            }
 
-        return true
+        return emitted
     }
 
     private fun Element.toSearchResult(): SearchResponse? {

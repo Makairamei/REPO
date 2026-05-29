@@ -36,12 +36,12 @@ open class AnixCafeGenericExtractor : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val emitted = linkedSetOf<String>()
+        val visited = linkedSetOf<String>()
         AnixCafeExtractorHelper.resolveLink(
             url = url,
             label = name,
             referer = referer ?: mainUrl,
-            emitted = emitted,
+            visited = visited,
             subtitleCallback = subtitleCallback,
             callback = callback,
             useGenericExtractor = false,
@@ -50,6 +50,8 @@ open class AnixCafeGenericExtractor : ExtractorApi() {
 }
 
 object AnixCafeExtractorHelper {
+    private const val MAX_TEXT_BODY_BYTES = 5_000_000L
+
     fun decodeMirror(value: String): List<String> {
         if (value.isBlank()) return emptyList()
 
@@ -80,14 +82,14 @@ object AnixCafeExtractorHelper {
         url: String,
         label: String,
         referer: String,
-        emitted: MutableSet<String>,
+        visited: MutableSet<String>,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
         useGenericExtractor: Boolean = true,
         depth: Int = 0,
     ) {
         val fixedUrl = normalizeUrl(url, referer) ?: return
-        if (!emitted.add(fixedUrl)) return
+        if (!visited.add(fixedUrl)) return
         if (isNoiseFrame(fixedUrl)) return
 
         if (isDirectMedia(fixedUrl)) {
@@ -110,13 +112,20 @@ object AnixCafeExtractorHelper {
             )
         }.getOrNull() ?: return
 
+        val contentType = response.headers["Content-Type"].orEmpty().lowercase()
+        val contentLength = response.headers["Content-Length"]?.toLongOrNull()
+
+        if (isBinaryResponse(contentType, contentLength)) {
+            return
+        }
+
+        val body = runCatching { response.text.cleanEscaped() }.getOrNull() ?: return
         val nested = linkedSetOf<String>()
-        val body = response.text.cleanEscaped()
 
         nested.addAll(extractMediaCandidates(body, fixedUrl))
         extractSubtitles(body, fixedUrl, subtitleCallback)
 
-        response.document.select("source[src], video[src], iframe[src], iframe[data-src], a[href]").forEach { element ->
+        Jsoup.parse(body, fixedUrl).select("source[src], video[src], iframe[src], iframe[data-src], a[href]").forEach { element ->
             element.attr("data-src")
                 .ifBlank { element.attr("abs:src") }
                 .ifBlank { element.attr("src") }
@@ -127,7 +136,7 @@ object AnixCafeExtractorHelper {
                 ?.let(nested::add)
         }
 
-        response.document.select("script").forEach { script ->
+        Jsoup.parse(body, fixedUrl).select("script").forEach { script ->
             val data = script.data()
             nested.addAll(extractMediaCandidates(data, fixedUrl))
             if (data.contains("eval(function(p,a,c,k,e,d)", true)) {
@@ -145,7 +154,7 @@ object AnixCafeExtractorHelper {
                 url = nestedUrl,
                 label = label,
                 referer = fixedUrl,
-                emitted = emitted,
+                visited = visited,
                 subtitleCallback = subtitleCallback,
                 callback = callback,
                 useGenericExtractor = useGenericExtractor,
@@ -214,7 +223,7 @@ object AnixCafeExtractorHelper {
 
         val patterns = listOf(
             Regex("""https?://[^\s"'<>\\]+?\.(?:m3u8|mp4|webm|txt)(?:\?[^"'<>\\\s]*)?""", RegexOption.IGNORE_CASE),
-            Regex("""https?://[^\s"'<>\\]+?(?:playmogo|videoplayer|dood|streamwish|wishfast|filemoon|vidhide|vidguard|streamtape|mp4upload|mixdrop|voe)[^\s"'<>\\]*""", RegexOption.IGNORE_CASE),
+            Regex("""https?://[^\s"'<>\\]+?(?:playmogo|videoplayer|dood|streamwish|wishfast|filemoon|vidhide|vidguard|streamtape|mp4upload|mixdrop|voe|dailymotion)[^\s"'<>\\]*""", RegexOption.IGNORE_CASE),
             Regex("""(?:file|src|source|video_url|videoUrl|play_url|playUrl|hls|url)\s*[:=]\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE),
             Regex("""["']((?:/|//)[^"']+\.(?:m3u8|mp4|webm|txt)[^"']*)["']""", RegexOption.IGNORE_CASE),
         )
@@ -271,7 +280,8 @@ object AnixCafeExtractorHelper {
                     lower.contains("streamtape") ||
                     lower.contains("mp4upload") ||
                     lower.contains("mixdrop") ||
-                    lower.contains("voe")
+                    lower.contains("voe") ||
+                    lower.contains("dailymotion")
                 )
     }
 
@@ -281,6 +291,16 @@ object AnixCafeExtractorHelper {
             lower.contains(".mp4") ||
             lower.contains(".webm") ||
             lower.contains(".txt")
+    }
+
+    private fun isBinaryResponse(contentType: String, contentLength: Long?): Boolean {
+        return contentType.startsWith("video/") ||
+            contentType.startsWith("audio/") ||
+            contentType.contains("octet-stream") ||
+            contentType.contains("application/vnd.apple.mpegurl") ||
+            contentType.contains("application/x-mpegurl") ||
+            contentType.contains("mpegurl") ||
+            (contentLength != null && contentLength > MAX_TEXT_BODY_BYTES)
     }
 
     private fun qualityFromUrl(url: String): Int {
