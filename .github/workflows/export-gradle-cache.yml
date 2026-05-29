@@ -1,40 +1,49 @@
-name: Export Gradle Cache
-
-on:
-workflow_dispatch:
-push:
-
-jobs:
-export:
-runs-on: ubuntu-latest
-
-steps:
-  - uses: actions/checkout@v4
-
-  - uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: "17"
-
-  - name: Make Gradle executable
-    run: chmod +x ./gradlew
-
-  - name: Download Cloudstream jar
-    run: |
-      mkdir -p "$HOME/.gradle/caches/cloudstream/cloudstream"
-      curl -L --retry 3 --fail -o "$HOME/.gradle/caches/cloudstream/cloudstream/cloudstream.jar" "https://github.com/recloudstream/cloudstream/releases/download/pre-release/classes.jar"
-
-  - name: Populate Gradle cache
-    run: ./gradlew :NoDrakorID:compileDebugKotlin --no-daemon || true
-
-  - name: Pack Gradle cache
-    run: |
-      mkdir -p gradle-cache-export
-      tar -czf gradle-cache-export/gradle-local-cache.tar.gz -C "$HOME" .gradle
-
-  - name: Upload Gradle cache
-    uses: actions/upload-artifact@v4
-    with:
-      name: gradle-local-cache
-      path: gradle-cache-export/gradle-local-cache.tar.gz
-      retention-days: 3
+{
+"name": "Export Gradle Cache",
+"on": {
+"workflow_dispatch": {},
+"push": {}
+},
+"jobs": {
+"export": {
+"runs-on": "ubuntu-latest",
+"steps": [
+{
+"uses": "actions/checkout@v4"
+},
+{
+"uses": "actions/setup-java@v4",
+"with": {
+"distribution": "temurin",
+"java-version": "17"
+}
+},
+{
+"name": "Make Gradle executable",
+"run": "chmod +x ./gradlew"
+},
+{
+"name": "Download Cloudstream jar",
+"run": "mkdir -p "$HOME/.gradle/caches/cloudstream/cloudstream"\ncurl -L --retry 3 --fail -o "$HOME/.gradle/caches/cloudstream/cloudstream/cloudstream.jar" "https://github.com/recloudstream/cloudstream/releases/download/pre-release/classes.jar""
+},
+{
+"name": "Populate Gradle cache",
+"run": "./gradlew :NoDrakorID:compileDebugKotlin --no-daemon || true"
+},
+{
+"name": "Pack Gradle cache",
+"run": "mkdir -p gradle-cache-export\ntar -czf gradle-cache-export/gradle-local-cache.tar.gz -C "$HOME" .gradle"
+},
+{
+"name": "Upload Gradle cache",
+"uses": "actions/upload-artifact@v4",
+"with": {
+"name": "gradle-local-cache",
+"path": "gradle-cache-export/gradle-local-cache.tar.gz",
+"retention-days": 3
+}
+}
+]
+}
+}
+}
