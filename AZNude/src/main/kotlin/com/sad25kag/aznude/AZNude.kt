@@ -332,7 +332,7 @@ class AZNude : MainAPI() {
         val block = blockRegex.find(scriptContent)?.groupValues?.getOrNull(1) ?: scriptContent
 
         val objectRegex = Regex(
-            """\{[^{}]*?(?:file|src)\s*:\s*["']([^"']+)["'][^{}]*?(?:label|res)\s*:\s*["']?([^"',}]+)["']?[^{}]*?} """.trim(),
+            """\{[^{}]*?(?:file|src)\s*:\s*["']([^"']+)["'][^{}]*?(?:label|res)\s*:\s*["']?([^"',}]+)["']?[^{}]*?\} """.trim(),
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
         )
         objectRegex.findAll(block).forEach { match ->
@@ -340,7 +340,7 @@ class AZNude : MainAPI() {
         }
 
         val reversedObjectRegex = Regex(
-            """\{[^{}]*?(?:label|res)\s*:\s*["']?([^"',}]+)["']?[^{}]*?(?:file|src)\s*:\s*["']([^"']+)["'][^{}]*?} """.trim(),
+            """\{[^{}]*?(?:label|res)\s*:\s*["']?([^"',}]+)["']?[^{}]*?(?:file|src)\s*:\s*["']([^"']+)["'][^{}]*?\} """.trim(),
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
         )
         reversedObjectRegex.findAll(block).forEach { match ->
