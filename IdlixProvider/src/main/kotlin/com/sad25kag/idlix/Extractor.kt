@@ -108,8 +108,7 @@ class Majorplay : ExtractorApi() {
             }
 
             subtitleCallback.invoke(
-                newSubtitleFile
-                (label, vttUrl),
+                newSubtitleFile(label, vttUrl),
             )
         }
     }
