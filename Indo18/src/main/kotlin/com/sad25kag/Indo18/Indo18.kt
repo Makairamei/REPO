@@ -34,6 +34,7 @@ import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.Base64
+import kotlin.random.Random
 
 @CloudstreamPlugin
 class Indo18Plugin : BasePlugin() {
@@ -300,6 +301,7 @@ class Indo18 : MainAPI() {
         candidates.toList().forEach { candidate ->
             when {
                 emitDirect(candidate, startUrl) -> found = true
+                tryDoodstream(candidate, startUrl, callback) -> found = true
                 tryExtractor(candidate, startUrl) -> found = true
             }
         }
@@ -316,6 +318,7 @@ class Indo18 : MainAPI() {
                 collectFromPage(embed, startUrl).forEach { nested ->
                     when {
                         emitDirect(nested, embed) -> found = true
+                        tryDoodstream(nested, embed, callback) -> found = true
                         tryExtractor(nested, embed) -> found = true
                     }
                     if (found) return@forEach
@@ -408,13 +411,21 @@ class Indo18 : MainAPI() {
         val decoded = runCatching { URLDecoder.decode(clean, "UTF-8") }.getOrDefault(clean)
         val source = if (decoded != clean) "$clean $decoded" else clean
         Regex(
-            """(?i)(?:https?:)?//(?:www\.)?(?:doodstream\.com|dood\.(?:watch|to|so|la|pm|re|ws|sh)|do0od\.com|doods\.(?:pro|to)|ds2play\.com)/(?:e|d|embed)/[A-Za-z0-9_-]+(?:[^"'\\\s<>]*)?""",
+            """(?i)(?:https?:)?//(?:www\.)?(?:doodstream\.(?:com|co|link)|dood\.(?:watch|to|so|la|pm|re|ws|sh|wf|cx|yt|li|one|video)|d0000d\.com|dooood\.com|do0od\.com|doods\.(?:pro|to)|doodcdn\.co|ds2play\.com)/(?:e|d|embed)/[A-Za-z0-9_-]+(?:[^"'\\\s<>]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(source).map { it.value }.forEach { raw ->
-            fixUrl(raw, baseUrl)?.let { links.add(it) }
+            normalizeDoodstreamUrl(raw, baseUrl)?.let { links.add(it) }
         }
         Regex(
-            """(?i)(?:src|href|data-src|data-url|data-video|data-file|file|url)\s*[:=]\s*["']([^"']*(?:doodstream\.com|dood\.|do0od\.com|doods\.|ds2play\.com)[^"']*)["']""",
+            """(?i)(?:doodstream\.(?:com|co|link)|dood\.(?:watch|to|so|la|pm|re|ws|sh|wf|cx|yt|li|one|video)|d0000d\.com|dooood\.com|do0od\.com|doods\.(?:pro|to)|doodcdn\.co|ds2play\.com)[^A-Za-z0-9_-]+(?:e|d|embed)[^A-Za-z0-9_-]+([A-Za-z0-9_-]{6,})""",
+            RegexOption.IGNORE_CASE
+        ).findAll(source).forEach { match ->
+            val host = match.value.substringBefore(match.groupValues[1]).replace(Regex("""[^A-Za-z0-9.:-]+$"""), "").substringAfterLast("//", match.value.substringBefore(match.groupValues[1]).substringBefore("/"))
+            val id = match.groupValues[1]
+            normalizeDoodstreamUrl("https://$host/e/$id", baseUrl)?.let { links.add(it) }
+        }
+        Regex(
+            """(?i)(?:src|href|data-src|data-url|data-video|data-file|file|url)\s*[:=]\s*["']([^"']*(?:doodstream\.(?:com|co|link)|dood\.|d0000d\.com|dooood\.com|do0od\.com|doods\.|doodcdn\.co|ds2play\.com)[^"']*)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(source).mapNotNull { it.groupValues.getOrNull(1) }.forEach { raw ->
             fixUrl(raw, baseUrl)?.let { links.add(it) }
@@ -440,10 +451,94 @@ class Indo18 : MainAPI() {
             if (fixed != null && (isLikelyPlayable(fixed) || isKnownHost(fixed))) urls.add(fixed)
         }
         Regex(
-            """https?://[^"'\\\s<>]+?(?:embed|player|stream|jomblo|playmogo|filemoon|streamwish|wishfast|doodstream|dood\.|do0od|doods|ds2play|dood|streamtape|vidhide|vidguard|voe|mixdrop|mp4upload|lulustream|luluvdoo|lulu|hglink|hgcloud|majorplay|jeniusplay|pornhub|xvideos|xhamster|redtube|spankbang)[^"'\\\s<>]*""",
+            """https?://[^"'\\\s<>]+?(?:embed|player|stream|jomblo|playmogo|filemoon|streamwish|wishfast|doodstream|dood\.|d0000d|dooood|do0od|doods|doodcdn|ds2play|dood|streamtape|vidhide|vidguard|voe|mixdrop|mp4upload|lulustream|luluvdoo|lulu|hglink|hgcloud|majorplay|jeniusplay|pornhub|xvideos|xhamster|redtube|spankbang)[^"'\\\s<>]*""",
             RegexOption.IGNORE_CASE
         ).findAll(clean).map { it.value }.forEach { fixUrl(it, baseUrl)?.let(urls::add) }
         return urls.filterNot { isAdUrl(it) || shouldSkipUrl(it) }.distinct()
+    }
+
+    private suspend fun tryDoodstream(link: String, referer: String, callback: (ExtractorLink) -> Unit): Boolean {
+        val doodUrl = normalizeDoodstreamUrl(link, referer) ?: return false
+        if (!isDoodstreamHost(doodUrl)) return false
+
+        if (tryExtractor(doodUrl, referer)) return true
+
+        val response = runCatching {
+            app.get(
+                doodUrl,
+                headers = headers + mapOf(
+                    "Referer" to referer,
+                    "Origin" to origin(doodUrl)
+                ),
+                referer = referer,
+                timeout = 20L
+            )
+        }.getOrNull() ?: return false
+
+        val html = response.text.cleanEscaped()
+        extractPlayableUrls(html, doodUrl).forEach { media ->
+            if (media.contains(".m3u8", true) || media.contains(".mp4", true) || media.contains(".webm", true)) {
+                return emitDirect(media, doodUrl)
+            }
+        }
+
+        val passPath = Regex("""(?i)(/pass_md5/[^'"\\\s<>]+)""").find(html)?.groupValues?.getOrNull(1)
+            ?: Regex("""(?i)pass_md5['"]?\s*[:=]\s*['"]([^'"]+)['"]""").find(html)?.groupValues?.getOrNull(1)
+                ?.let { if (it.startsWith("/")) it else "/pass_md5/$it" }
+            ?: return false
+
+        val doodOrigin = origin(doodUrl)
+        val token = passPath.substringAfterLast("/").substringBefore("?")
+        val directSeed = runCatching {
+            app.get(
+                doodOrigin + passPath,
+                headers = headers + mapOf(
+                    "Referer" to doodUrl,
+                    "X-Requested-With" to "XMLHttpRequest"
+                ),
+                referer = doodUrl,
+                timeout = 20L
+            ).text.cleanEscaped().trim()
+        }.getOrNull()?.takeIf { it.startsWith("http", true) } ?: return false
+
+        val finalUrl = if (directSeed.contains("token=", true)) {
+            directSeed
+        } else {
+            directSeed + randomAlphaNum(10) + "?token=$token&expiry=${System.currentTimeMillis()}"
+        }
+        callback(
+            newExtractorLink(
+                source = "$name Doodstream",
+                name = "$name Doodstream",
+                url = finalUrl,
+                type = ExtractorLinkType.VIDEO
+            ) {
+                this.referer = doodUrl
+                this.quality = qualityFromUrl(finalUrl)
+                this.headers = mapOf(
+                    "User-Agent" to USER_AGENT,
+                    "Referer" to doodUrl,
+                    "Origin" to doodOrigin,
+                    "Accept" to "*/*"
+                )
+            }
+        )
+        return true
+    }
+
+    private fun normalizeDoodstreamUrl(raw: String, baseUrl: String): String? {
+        val fixed = fixUrl(raw, baseUrl) ?: return null
+        if (!isDoodstreamHost(fixed)) return null
+        return fixed
+            .replace("/d/", "/e/", ignoreCase = true)
+            .replace("/embed/", "/e/", ignoreCase = true)
+            .substringBefore("&autoplay")
+            .substringBefore("?download")
+    }
+
+    private fun randomAlphaNum(length: Int): String {
+        val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return (1..length).map { chars[Random.nextInt(chars.length)] }.joinToString("")
     }
 
     private fun prioritizeEmbeds(links: Collection<String>): List<String> {
@@ -481,6 +576,8 @@ class Indo18 : MainAPI() {
     private fun isDoodstreamHost(url: String): Boolean {
         val value = url.lowercase()
         return value.contains("doodstream.com") ||
+            value.contains("doodstream.co") ||
+            value.contains("doodstream.link") ||
             value.contains("dood.watch") ||
             value.contains("dood.to") ||
             value.contains("dood.so") ||
@@ -489,9 +586,18 @@ class Indo18 : MainAPI() {
             value.contains("dood.re") ||
             value.contains("dood.ws") ||
             value.contains("dood.sh") ||
+            value.contains("dood.wf") ||
+            value.contains("dood.cx") ||
+            value.contains("dood.yt") ||
+            value.contains("dood.li") ||
+            value.contains("dood.one") ||
+            value.contains("dood.video") ||
+            value.contains("d0000d.com") ||
+            value.contains("dooood.com") ||
             value.contains("do0od.com") ||
             value.contains("doods.pro") ||
             value.contains("doods.to") ||
+            value.contains("doodcdn.co") ||
             value.contains("ds2play.com")
     }
 
