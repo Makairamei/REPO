@@ -1,13 +1,11 @@
 package com.sad25kag.animemovies
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addEpisodes
-import com.lagradost.cloudstream3.extractors.Filesim
-import com.lagradost.cloudstream3.extractors.Goodstream
-import com.lagradost.cloudstream3.extractors.StreamTape
-import com.lagradost.cloudstream3.extractors.VidHidePro
-import com.lagradost.cloudstream3.network.WebViewResolver
-import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.SubtitleFile
+import com.lagradost.cloudstream3.utils.getQualityFromName
+import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 
 class AnimeMovies : MainAPI() {
@@ -22,14 +20,30 @@ class AnimeMovies : MainAPI() {
         "$mainUrl/genre" to "Genre"
     )
 
+    private fun normalizeTitleFromUrl(url: String): String {
+        return url.substringAfterLast('/')
+            .substringBefore('?')
+            .replace('-', ' ')
+            .replace("subtitle indonesia", "")
+            .trim()
+    }
+
     private fun Element.toSearchResult(): SearchResponse? {
-        val href = selectFirst("a[href*=/anime/]")?.attr("abs:href") ?: return null
-        val title = selectFirst("h3, h2, .line-clamp-2, .font-semibold")?.text()?.trim().takeUnless { it.isNullOrBlank() }
-            ?: selectFirst("img[alt]")?.attr("alt")?.trim()
-            ?: href.substringAfterLast('/').substringBefore('?').replace('-', ' ')
-        val poster = selectFirst("img")?.let { img ->
-            img.attr("abs:src").ifBlank { img.attr("abs:data-src") }
+        val anchor = if (tagName() == "a") this else selectFirst("a[href*=/anime/]") ?: return null
+        val href = anchor.attr("abs:href").ifBlank { anchor.attr("href") }
+        if (!href.contains("/anime/")) return null
+
+        val title = anchor.selectFirst("h1, h2, h3, h4, .line-clamp-2, .font-semibold")?.text()?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: anchor.selectFirst("img[alt]")?.attr("alt")?.trim()?.takeIf { it.isNotBlank() }
+            ?: normalizeTitleFromUrl(href)
+
+        val poster = anchor.selectFirst("img")?.let { img ->
+            img.attr("abs:src").ifBlank {
+                img.attr("abs:data-src").ifBlank { img.attr("src") }
+            }
         }
+
         return newAnimeSearchResponse(title, href, TvType.Anime) {
             this.posterUrl = poster
         }
@@ -37,46 +51,62 @@ class AnimeMovies : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val doc = app.get(request.data).document
-        val items = doc.select("a[href*=/anime/]")
-            .mapNotNull { it.parent()?.toSearchResult() ?: it.toSearchResult() }
+        val results = doc.select("a[href*=/anime/]")
+            .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
-        return newHomePageResponse(request.name, items)
+        return newHomePageResponse(request.name, results)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val doc = app.get("$mainUrl/anime?q=${query.urlEncoded()}").document
-        var items = doc.select("a[href*=/anime/]")
-            .mapNotNull { it.parent()?.toSearchResult() ?: it.toSearchResult() }
+        val doc = app.get("$mainUrl/anime").document
+        return doc.select("a[href*=/anime/]")
+            .mapNotNull { it.toSearchResult() }
+            .filter { it.name.contains(query, ignoreCase = true) }
             .distinctBy { it.url }
-        if (items.isEmpty()) {
-            val fallback = app.get("$mainUrl/anime").document
-            items = fallback.select("a[href*=/anime/]")
-                .mapNotNull { it.parent()?.toSearchResult() ?: it.toSearchResult() }
-                .filter { it.name.contains(query, true) }
-                .distinctBy { it.url }
-        }
-        return items
     }
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1")?.text()?.trim() ?: doc.title().substringBefore("|").trim()
-        val poster = doc.selectFirst("img[src*=_next/image], img[alt]")?.let { img ->
-            img.attr("abs:src").ifBlank { img.attr("abs:data-src") }
+        val title = doc.selectFirst("h1")?.text()?.trim()?.takeIf { it.isNotBlank() }
+            ?: doc.title().substringBefore("|").trim()
+
+        val poster = doc.selectFirst("img[src*=_next/image], img[alt], img")?.let { img ->
+            img.attr("abs:src").ifBlank {
+                img.attr("abs:data-src").ifBlank { img.attr("src") }
+            }
         }
-        val tags = doc.select("a[href*=/genre/], a[href*=/jadwal/], .text-xs a, .text-sm a").map { it.text().trim() }.filter { it.isNotBlank() }.distinct()
+
+        val tags = doc.select("a[href*=/genre/]")
+            .map { it.text().trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
         val description = doc.selectFirst("meta[name=description]")?.attr("content")?.trim()
-            ?: doc.selectFirst("p")?.text()?.trim()
-        val episodes = doc.select("a[href*=/watch/]").mapIndexed { index, a ->
-            val epName = a.text().trim().ifBlank { "Episode ${index + 1}" }
-            Episode(a.attr("abs:href"), name = epName, episode = Regex("episode\s*(\d+)", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.getOrNull(1)?.toFloatOrNull())
-        }.distinctBy { it.data }
+            ?.takeIf { it.isNotBlank() }
+            ?: doc.select("p").map { it.text().trim() }.firstOrNull { it.isNotBlank() }
+
+        val episodes = doc.select("a[href*=/watch/]")
+            .distinctBy { it.attr("abs:href") }
+            .mapIndexed { index, a ->
+                val epUrl = a.attr("abs:href")
+                val epName = a.text().trim().ifBlank { "Episode ${index + 1}" }
+                val epNum = Regex("episode\\s*(\\d+)", RegexOption.IGNORE_CASE)
+                    .find(epName)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                Episode(
+                    data = epUrl,
+                    name = epName,
+                    episode = epNum
+                )
+            }
 
         return newAnimeLoadResponse(title, url, TvType.Anime) {
             posterUrl = poster
             plot = description
             this.tags = tags
-            addEpisodes(DubStatus.Subbed, episodes)
+            this.episodes = episodes
         }
     }
 
@@ -87,33 +117,35 @@ class AnimeMovies : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val html = app.get(data).text
+        var found = false
 
-        Regex("https?:\/\/[^"'\s<>]+(?:m3u8|mp4)[^"'\s<>]*", RegexOption.IGNORE_CASE)
-            .findAll(html)
-            .map { it.value.replace("\/", "/") }
+        val directRegex = Regex("""https?:\\/\\/[^\"'\\s<>]+(?:m3u8|mp4)[^\"'\\s<>]*""", RegexOption.IGNORE_CASE)
+        directRegex.findAll(html)
+            .map { it.value.replace("\\/", "/") }
             .distinct()
             .forEach { link ->
-                callback.invoke(
+                found = true
+                callback(
                     ExtractorLink(
                         source = name,
                         name = "$name Direct",
                         url = link,
                         referer = data,
                         quality = getQualityFromName(link),
-                        isM3u8 = link.contains(".m3u8", true)
+                        isM3u8 = link.contains(".m3u8", ignoreCase = true)
                     )
                 )
             }
 
-        Regex("<iframe[^>]+src=["']([^"']+)["']", RegexOption.IGNORE_CASE)
-            .findAll(html)
-            .mapNotNull { it.groupValues.getOrNull(1) }
-            .map { if (it.startsWith("//")) "https:$it" else it }
+        val embedRegex = Regex("""\"embed_url\":\"(https?:\\/\\/[^\"]+)\"""", RegexOption.IGNORE_CASE)
+        embedRegex.findAll(html)
+            .map { it.groupValues[1].replace("\\/", "/") }
             .distinct()
-            .forEach { iframe ->
-                loadExtractor(iframe, data, subtitleCallback, callback)
+            .forEach { embedUrl ->
+                found = true
+                loadExtractor(embedUrl, data, subtitleCallback, callback)
             }
 
-        return true
+        return found
     }
 }
