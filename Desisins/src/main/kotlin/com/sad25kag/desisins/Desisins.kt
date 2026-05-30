@@ -162,10 +162,11 @@ class Desisins : MainAPI() {
             ?.ifBlank { null }
             ?: "Desisins"
 
-        val poster = document.selectFirst("meta[property=og:image], meta[name=twitter:image]")
-            ?.attr("content")
-            ?.let { absoluteUrlOrNull(it, url) }
-            ?: findPosterUrl(document.body(), url)
+        val poster = findPosterUrl(document.body(), url)
+            ?: document.selectFirst("meta[property=og:image], meta[name=twitter:image]")
+                ?.attr("content")
+                ?.takeIf { it.isValidImageValue() }
+                ?.let { absoluteUrlOrNull(it, url) }
 
         val description = document.selectFirst("meta[property=og:description], meta[name=description], div.g1-meta, .entry-summary")
             ?.let {
@@ -312,6 +313,7 @@ class Desisins : MainAPI() {
     }
 
     private fun extractImageFromElement(element: Element, pageUrl: String): String? {
+        val candidates = mutableListOf<String>()
         val attrs = listOf(
             "data-src",
             "data-lazy-src",
@@ -326,19 +328,15 @@ class Desisins : MainAPI() {
 
         attrs.forEach { attr ->
             val value = element.attr(attr).trim()
-            if (value.isValidImageValue()) {
-                return absoluteUrlOrNull(value, pageUrl)
-            }
+            if (value.isValidImageValue()) candidates.add(value)
         }
 
         listOf("srcset", "data-srcset").forEach { attr ->
             val value = element.attr(attr).trim()
-            val firstImage = value.split(",")
+            value.split(",")
                 .map { it.trim().substringBefore(" ").trim() }
-                .firstOrNull { it.isValidImageValue() }
-            if (!firstImage.isNullOrBlank()) {
-                return absoluteUrlOrNull(firstImage, pageUrl)
-            }
+                .filter { it.isValidImageValue() }
+                .forEach(candidates::add)
         }
 
         val style = element.attr("style")
@@ -349,20 +347,55 @@ class Desisins : MainAPI() {
                 ?.getOrNull(2)
                 ?.trim()
                 ?.takeIf { it.isValidImageValue() }
-                ?.let { return absoluteUrlOrNull(it, pageUrl) }
+                ?.let(candidates::add)
         }
 
-        return null
+        return candidates
+            .distinct()
+            .sortedByDescending { it.posterScore() }
+            .firstOrNull()
+            ?.let { absoluteUrlOrNull(it, pageUrl) }
     }
 
     private fun String.isValidImageValue(): Boolean {
         if (isBlank()) return false
         if (startsWith("data:", true)) return false
-        if (contains("blank", true) || contains("placeholder", true) || contains("spacer", true)) return false
-        return contains(".jpg", true) ||
-            contains(".jpeg", true) ||
-            contains(".png", true) ||
-            contains(".webp", true) ||
-            contains("/wp-content/uploads/", true)
+
+        val lower = lowercase()
+        if (lower.contains("blank") ||
+            lower.contains("placeholder") ||
+            lower.contains("spacer") ||
+            lower.contains("favicon") ||
+            lower.contains("cropped") ||
+            lower.contains("logo") ||
+            lower.contains("banner") ||
+            lower.contains("header") ||
+            lower.endsWith(".svg")
+        ) return false
+
+        return lower.contains(".jpg") ||
+            lower.contains(".jpeg") ||
+            lower.contains(".png") ||
+            lower.contains(".webp") ||
+            lower.contains("/wp-content/uploads/")
+    }
+
+    private fun String.posterScore(): Int {
+        val lower = lowercase()
+        var score = 0
+
+        if (lower.contains("thumb")) score += 8
+        if (lower.contains("poster")) score += 8
+        if (lower.contains("featured")) score += 6
+        if (lower.contains("uploads")) score += 4
+        if (lower.contains(".webp")) score += 3
+        if (lower.contains(".jpg") || lower.contains(".jpeg")) score += 2
+
+        if (lower.contains("150x150")) score -= 4
+        if (lower.contains("100x")) score -= 4
+        if (lower.contains("32x32")) score -= 10
+        if (lower.contains("cropped") || lower.contains("logo") || lower.contains("banner")) score -= 20
+
+        return score
     }
 }
