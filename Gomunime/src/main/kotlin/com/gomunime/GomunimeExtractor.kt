@@ -67,7 +67,7 @@ object GomunimeExtractor {
         pixelDrainDirectUrl(normalizedUrl)?.let { direct ->
             callback(
                 newExtractorLink(providerName, "PixelDrain", direct, ExtractorLinkType.VIDEO) {
-                    referer = "https://pixeldrain.com/"
+                    this.referer = "https://pixeldrain.com/"
                     quality = qualityFromUrl(normalizedUrl)
                     headers = mapOf(
                         "User-Agent" to GomunimeUtils.USER_AGENT,
