@@ -1,17 +1,16 @@
-version = 11
+version = 12
 
 cloudstream {
     authors = listOf("sad25kag", "BetbetMiro")
     language = "id"
-    description = "Provider CloudStream untuk GudangFilm / Dutamovie21 source dengan homepage, search, dan loadLinks terbaru."
+    description = "GudangFilm provider untuk domain aktif huazai6.com dengan kategori, search, detail, dan loadLinks mengikuti sumber terbaru."
     status = 1
 
     tvTypes = listOf(
         "Movie",
         "TvSeries",
-        "Anime",
         "AsianDrama"
     )
 
-    iconUrl = "https://www.google.com/s2/favicons?domain=itoshii-movie.com&sz=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=www.huazai6.com&sz=%size%"
 }
