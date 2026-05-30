@@ -11,14 +11,14 @@ object SurgeFilm21Parser {
         ".swiper-slide", ".splide__slide", ".poster-card", "a[href]"
     ).joinToString(",")
 
-    fun parseHomeItems(document: Document, baseUrl: String, defaultType: TvType = TvType.Movie): List<SearchResponse> {
+    fun parseHomeItems(api: MainAPI, document: Document, baseUrl: String, defaultType: TvType = TvType.Movie): List<SearchResponse> {
         return document.select(cardSelectors)
-            .mapNotNull { it.toSearchResponse(baseUrl, defaultType) }
+            .mapNotNull { it.toSearchResponse(api, baseUrl, defaultType) }
             .distinctBy { it.url }
             .filter { it.name.length >= 2 }
     }
 
-    fun parseSectionItems(document: Document, sectionName: String, baseUrl: String, defaultType: TvType = TvType.Movie): List<SearchResponse> {
+    fun parseSectionItems(api: MainAPI, document: Document, sectionName: String, baseUrl: String, defaultType: TvType = TvType.Movie): List<SearchResponse> {
         val exact = document.select("h1,h2,h3,h4,.section-title,.title")
             .firstOrNull { it.text().contains(sectionName, ignoreCase = true) }
 
@@ -30,13 +30,13 @@ object SurgeFilm21Parser {
         ).distinct()
 
         val scoped = scopes.flatMap { scope ->
-            scope.select(cardSelectors).mapNotNull { it.toSearchResponse(baseUrl, defaultType) }
+            scope.select(cardSelectors).mapNotNull { it.toSearchResponse(api, baseUrl, defaultType) }
         }.distinctBy { it.url }
 
-        return scoped.ifEmpty { parseHomeItems(document, baseUrl, defaultType) }
+        return scoped.ifEmpty { parseHomeItems(api, document, baseUrl, defaultType) }
     }
 
-    fun Element.toSearchResponse(baseUrl: String, defaultType: TvType = TvType.Movie): SearchResponse? {
+    private fun Element.toSearchResponse(api: MainAPI, baseUrl: String, defaultType: TvType = TvType.Movie): SearchResponse? {
         val anchor = if (`is`("a[href]")) this else selectFirst("a[href]") ?: return null
         val href = anchor.attr("href").absUrlSf21(baseUrl) ?: return null
         if (!href.contains("surgafilm21.homes", true)) return null
@@ -57,8 +57,8 @@ object SurgeFilm21Parser {
         val type = inferType(title, href, defaultType)
 
         return when (type) {
-            TvType.TvSeries, TvType.AsianDrama, TvType.Anime -> newTvSeriesSearchResponse(title, href, type) { posterUrl = poster }
-            else -> newMovieSearchResponse(title, href, type) { posterUrl = poster }
+            TvType.TvSeries, TvType.AsianDrama, TvType.Anime -> api.newTvSeriesSearchResponse(title, href, type) { posterUrl = poster }
+            else -> api.newMovieSearchResponse(title, href, type) { posterUrl = poster }
         }
     }
 
@@ -129,14 +129,14 @@ object SurgeFilm21Parser {
         return rating?.times(1000)?.toInt()
     }
 
-    fun parseEpisodes(document: Document, pageUrl: String): List<Episode> {
+    fun parseEpisodes(api: MainAPI, document: Document, pageUrl: String): List<Episode> {
         val candidates = document.select("a[href*='episode'], a[href*='/eps'], a[href*='?episode='], .episode a[href], .episodes a[href], .eps a[href], .eplist a[href], .list-episode a[href]")
         return candidates.mapNotNull { element ->
             val href = element.attr("href").absUrlSf21(pageUrl) ?: return@mapNotNull null
             if (href == pageUrl) return@mapNotNull null
             val number = Regex("""(?i)(?:episode|eps|ep|e)[-_\s]*(\d+)""").find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
                 ?: Regex("""^\D*(\d+)\D*$""").find(element.text().trim())?.groupValues?.getOrNull(1)?.toIntOrNull()
-            newEpisode(href) {
+            api.newEpisode(href) {
                 name = element.text().cleanSf21().takeIf { it.isNotBlank() && it.length > 1 } ?: number?.let { "Episode $it" } ?: "Episode"
                 episode = number
             }

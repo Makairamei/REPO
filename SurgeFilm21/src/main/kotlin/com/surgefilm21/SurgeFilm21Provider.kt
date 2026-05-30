@@ -47,9 +47,9 @@ class SurgeFilm21Provider : MainAPI() {
 
         val document = SurgeFilm21Sepeda.getDocument(mainUrl)
         val list = section?.let {
-            SurgeFilm21Parser.parseSectionItems(document, it.data.removePrefix("section:"), mainUrl, defaultType)
+            SurgeFilm21Parser.parseSectionItems(this, document, it.data.removePrefix("section:"), mainUrl, defaultType)
                 .ifEmpty { searchPage(it.fallbackQuery, page, defaultType) }
-        } ?: SurgeFilm21Parser.parseHomeItems(document, mainUrl, defaultType)
+        } ?: SurgeFilm21Parser.parseHomeItems(this, document, mainUrl, defaultType)
 
         return newHomePageResponse(HomePageList(request.name, list.distinctBy { it.url }, isHorizontalImages = true), hasNext = list.isNotEmpty())
     }
@@ -79,7 +79,7 @@ class SurgeFilm21Provider : MainAPI() {
         for (url in candidates) {
             val items = runCatching {
                 val document = SurgeFilm21Sepeda.getDocument(url, mainUrl)
-                SurgeFilm21Parser.parseHomeItems(document, url, defaultType)
+                SurgeFilm21Parser.parseHomeItems(this, document, url, defaultType)
                     .filter { it.name.contains(query, true) || query.length <= 4 }
                     .distinctBy { it.url }
             }.getOrNull().orEmpty()
@@ -95,9 +95,8 @@ class SurgeFilm21Provider : MainAPI() {
         val plot = SurgeFilm21Parser.parsePlot(document)
         val tags = SurgeFilm21Parser.parseTags(document)
         val year = SurgeFilm21Parser.parseYear(document, title)
-        val rating = SurgeFilm21Parser.parseRating(document)
         val inferredType = SurgeFilm21Parser.inferType(title, url, TvType.Movie)
-        val episodes = SurgeFilm21Parser.parseEpisodes(document, url)
+        val episodes = SurgeFilm21Parser.parseEpisodes(this, document, url)
 
         return if (episodes.isNotEmpty() && inferredType != TvType.Movie && inferredType != TvType.AnimeMovie) {
             newTvSeriesLoadResponse(title, url, inferredType, episodes) {
@@ -105,7 +104,6 @@ class SurgeFilm21Provider : MainAPI() {
                 this.plot = plot
                 this.tags = tags
                 this.year = year
-                this.rating = rating
             }
         } else {
             newMovieLoadResponse(title, url, inferredType, url) {
@@ -113,7 +111,6 @@ class SurgeFilm21Provider : MainAPI() {
                 this.plot = plot
                 this.tags = tags
                 this.year = year
-                this.rating = rating
             }
         }
     }
