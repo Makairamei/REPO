@@ -2,8 +2,8 @@ version = 11
 
 cloudstream {
     language = "id"
-    description = "Gomunime provider untuk anime sub Indo dengan kategori terbaru dari website sumber."
+    description = "Gomunime dinonaktifkan sementara karena loadLinks dari sumber saat ini belum stabil dan sering menghasilkan tautan tidak playable."
     authors = listOf("Betbet")
-    status = 1
+    status = 0
     tvTypes = listOf("Anime", "AnimeMovie", "OVA")
 }
