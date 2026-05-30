@@ -1,8 +1,8 @@
-version = 3
+version = 4
 
 cloudstream {
     language = "id"
-    description = "Dubbindo — Streaming Anime, Movie, TV Series, Shorts, dan video dubbing Indonesia."
+    description = "Dubbindo — status terbatas: provider masih dapat memuat sebagian link, tetapi banyak konten di website sumber sedang processing/mati, poster kosong, atau media tidak dapat diputar."
     authors = listOf("BetbetMiro")
 
     /**
@@ -12,7 +12,7 @@ cloudstream {
      * 2: Slow
      * 3: Beta only
      */
-    status = 1
+    status = 0
 
     tvTypes = listOf(
         "TvSeries",

@@ -15,7 +15,7 @@ import java.net.URLEncoder
 
 class DubbindoProvider : MainAPI() {
     override var mainUrl = "https://www.dubbindo.site"
-    override var name = "Dubbindo"
+    override var name = "Dubbindo (Source Limited)"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var lang = "id"
