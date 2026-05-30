@@ -1,8 +1,8 @@
-version = 5
+version = 6
 
 cloudstream {
     language = "id"
-    description = "FilmLokal provider split-structure dengan kategori dari tv1.filmlokal.me."
+    description = "FilmLokal provider split-structure dengan search fallback dan DooPlay/AJAX loadLinks untuk tv1.filmlokal.me."
     authors = listOf("Betbet")
     status = 1
     tvTypes = listOf("Movie", "TvSeries", "NSFW")

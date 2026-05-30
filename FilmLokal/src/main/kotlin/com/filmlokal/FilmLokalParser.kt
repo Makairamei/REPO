@@ -29,6 +29,7 @@ object FilmLokalParser {
         ".post",
         ".item:has(img)",
         ".owl-item:has(img)",
+        ".swiper-slide:has(img)",
         "a[href]:has(img)"
     ).joinToString(",")
 
@@ -36,24 +37,51 @@ object FilmLokalParser {
         "img[src], img[data-src], img[data-lazy-src], img[data-original], img[data-wpfc-original-src], img[srcset]"
 
     fun parseListing(api: MainAPI, document: Document): List<SearchResponse> {
-        val primary = document.select(cardSelectors)
-        val containers: List<Element> = if (primary.isNotEmpty()) {
-            primary.toList()
-        } else {
-            document.select("a[href]:has(img)").toList()
+        val results = linkedMapOf<String, SearchResponse>()
+
+        val containers = document.select(cardSelectors)
+            .ifEmpty { document.select("a[href]:has(img)") }
+
+        containers.mapNotNull { parseCard(api, it) }
+            .forEach { results[it.url] = it }
+
+        if (results.isEmpty()) {
+            document.select("a[href]").mapNotNull { parseLooseAnchor(api, it) }
+                .forEach { results[it.url] = it }
         }
 
-        return containers
-            .mapNotNull { parseCard(api, it) }
-            .distinctBy { it.url }
-            .take(48)
+        return results.values.take(72)
+    }
+
+    private fun parseLooseAnchor(api: MainAPI, anchor: Element): SearchResponse? {
+        val href = absoluteUrl(api.mainUrl, anchor.attr("href")) ?: return null
+        if (!isVideoUrl(href)) return null
+
+        val text = listOf(
+            anchor.attr("title"),
+            anchor.text(),
+            anchor.selectFirst("img[alt]")?.attr("alt"),
+            href.substringAfterLast('/').replace("-", " ")
+        ).firstOrNull { !it.isNullOrBlank() } ?: return null
+
+        val title = cleanTitle(text).ifBlank { return null }
+        if (title.length < 2 || isBadTitle(title)) return null
+
+        val poster = extractPoster(api.mainUrl, anchor.selectFirst(IMAGE_SELECTOR), anchor)
+        val type = typeFromUrlOrTitle(href, title)
+
+        return if (type == TvType.TvSeries) {
+            api.newTvSeriesSearchResponse(title, href, type) { posterUrl = poster }
+        } else {
+            api.newMovieSearchResponse(title, href, type) { posterUrl = poster }
+        }
     }
 
     private fun parseCard(api: MainAPI, element: Element): SearchResponse? {
         val link = when {
             element.tagName().equals("a", ignoreCase = true) && element.hasAttr("href") -> element
             else -> element.selectFirst("a[href]:has(img)")
-                ?: element.selectFirst("h2 a[href], h3 a[href], .title a[href], a[title][href]")
+                ?: element.selectFirst("h1 a[href], h2 a[href], h3 a[href], .title a[href], .entry-title a[href], a[title][href], a[href]")
                 ?: return null
         }
 
@@ -63,20 +91,30 @@ object FilmLokalParser {
         val image = link.selectFirst(IMAGE_SELECTOR)
             ?: element.selectFirst(IMAGE_SELECTOR)
             ?: element.parent()?.selectFirst(IMAGE_SELECTOR)
-            ?: return null
 
         val title = cleanTitle(
-            link.attr("title").ifBlank { link.attr("aria-label") }.ifBlank { link.text() }.ifBlank {
-                image.attr("alt").ifBlank { image.attr("title") }
-            }
+            element.selectFirst("h1, h2, h3, .title, .entry-title")?.text()
+                ?: link.attr("title").ifBlank { link.attr("aria-label") }.ifBlank { link.text() }.ifBlank {
+                    image?.attr("alt").orEmpty().ifBlank { image?.attr("title").orEmpty() }
+                }.ifBlank {
+                    href.substringAfterLast('/').replace("-", " ")
+                }
         ).ifBlank { return null }
 
-        val poster = extractPoster(api.mainUrl, image, link) ?: extractPoster(api.mainUrl, image, element)
-        if (!isValidPoster(poster)) return null
+        if (title.length < 2 || isBadTitle(title)) return null
+
+        val poster = extractPoster(api.mainUrl, image, link)
+            ?: extractPoster(api.mainUrl, image, element)
 
         val type = typeFromUrlOrTitle(href, title)
-        return api.newMovieSearchResponse(title, href, type) {
-            posterUrl = poster
+        return if (type == TvType.TvSeries) {
+            api.newTvSeriesSearchResponse(title, href, type) {
+                posterUrl = poster
+            }
+        } else {
+            api.newMovieSearchResponse(title, href, type) {
+                posterUrl = poster
+            }
         }
     }
 
@@ -102,22 +140,10 @@ object FilmLokalParser {
         )
 
         val tags = document.select(
-            "a[href*='/genre/'], " +
-                "a[href*='/country/'], " +
-                "a[href*='/year/'], " +
-                "a[href*='/quality/'], " +
-                "a[href*='/action/'], " +
-                "a[href*='/adventure/'], " +
-                "a[href*='/animation/'], " +
-                "a[href*='/comedy/'], " +
-                "a[href*='/crime/'], " +
-                "a[href*='/drama/'], " +
-                "a[href*='/fantasy/'], " +
-                "a[href*='/horror/'], " +
-                "a[href*='/mystery/'], " +
-                "a[href*='/romance/'], " +
-                "a[href*='/sci-fi/'], " +
-                "a[href*='/thriller/']"
+            "a[href*='/genre/'], a[href*='/country/'], a[href*='/year/'], a[href*='/quality/'], " +
+                "a[href*='/action/'], a[href*='/adventure/'], a[href*='/animation/'], a[href*='/comedy/'], " +
+                "a[href*='/crime/'], a[href*='/drama/'], a[href*='/fantasy/'], a[href*='/horror/'], " +
+                "a[href*='/mystery/'], a[href*='/romance/'], a[href*='/sci-fi/'], a[href*='/thriller/']"
         )
             .map { cleanTitle(it.text()) }
             .filter { it.length in 2..30 }
@@ -125,14 +151,15 @@ object FilmLokalParser {
                 tag.equals("Watch", true) ||
                     tag.equals("Trailer", true) ||
                     tag.equals("Download", true) ||
-                    tag.equals("Home", true)
+                    tag.equals("Home", true) ||
+                    tag.equals("Movie Ads", true)
             }
             .distinct()
             .take(16)
 
         val episodes = parseEpisodes(api, document, url)
         val recommendations = parseListing(api, document).filterNot { it.url == url }.take(12)
-        val type = if (episodes.size > 1) TvType.TvSeries else typeFromUrlOrTitle(url, title)
+        val type = if (episodes.isNotEmpty()) TvType.TvSeries else typeFromUrlOrTitle(url, title)
 
         return if (type == TvType.TvSeries) {
             api.newTvSeriesLoadResponse(title, url, type, episodes) {
@@ -158,6 +185,7 @@ object FilmLokalParser {
         val episodes = document.select(selectors).mapNotNull { anchor ->
             val href = absoluteUrl(api.mainUrl, anchor.attr("href")) ?: return@mapNotNull null
             if (!isVideoUrl(href)) return@mapNotNull null
+            if (href.substringBefore("#") == fallbackUrl.substringBefore("#")) return@mapNotNull null
             val normalized = href.substringBefore("#")
             if (!seen.add(normalized)) return@mapNotNull null
 
@@ -170,15 +198,8 @@ object FilmLokalParser {
             }
         }
 
-        return episodes.ifEmpty {
-            listOf(
-                api.newEpisode(fallbackUrl) {
-                    name = "Movie"
-                }
-            )
-        }
+        return episodes
     }
-
 
     private fun extractDetailPoster(baseUrl: String, title: String, document: Document): String? {
         val tokens = titleTokens(title)
@@ -241,7 +262,7 @@ object FilmLokalParser {
     }
 
     private fun titleTokens(title: String): List<String> {
-        val ignored = setOf("sub", "dub", "the", "movie", "film", "and", "with", "untuk")
+        val ignored = setOf("sub", "dub", "the", "movie", "film", "and", "with", "untuk", "nonton", "watch")
         return cleanText(title.lowercase())
             .replace(Regex("[^a-z0-9]+"), " ")
             .split(' ')
@@ -278,9 +299,24 @@ object FilmLokalParser {
         return cleanText(value)
             .replace(Regex("(?i)^permalink\\s+to:\\s*"), "")
             .replace(Regex("(?i)^permalink:\\s*"), "")
+            .replace(Regex("(?i)^watch\\s+movie\\s*"), "")
+            .replace(Regex("(?i)^watch\\s*"), "")
+            .replace(Regex("(?i)^nonton\\s+"), "")
             .replace(Regex("(?i)\\s+-\\s+filmlokal$"), "")
             .replace(Regex("(?i)\\s+subtitle\\s+indonesia$"), " Sub")
             .replace(Regex("\\s+"), " ")
             .trim()
+    }
+
+    private fun isBadTitle(title: String): Boolean {
+        val low = title.lowercase()
+        return low == "home" ||
+            low == "movie" ||
+            low == "movies" ||
+            low == "more movie" ||
+            low == "watch movie" ||
+            low == "trailer" ||
+            low == "download" ||
+            low.startsWith("download via")
     }
 }

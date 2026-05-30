@@ -17,7 +17,8 @@ object FilmLokalUtils {
     fun videoHeaders(referer: String): Map<String, String> = mapOf(
         "User-Agent" to USER_AGENT,
         "Accept" to "*/*",
-        "Referer" to referer
+        "Referer" to referer,
+        "Origin" to (originOf(referer) ?: FilmLokalSeeds.MAIN_URL)
     )
 
     private val catalogSegments = setOf(
@@ -26,11 +27,16 @@ object FilmLokalUtils {
         "live-streaming-igo", "jeruk-barat", "asian-amateur", "jav",
         "film-series", "action", "adventure", "animation", "comedy", "crime",
         "drama", "fantasy", "horror", "mystery", "romance", "sci-fi", "thriller",
-        "year", "country", "genre", "quality", "tag", "cast", "director", "author"
+        "year", "country", "genre", "quality", "tag", "cast", "director", "author",
+        "wp-admin", "wp-content", "wp-includes"
     )
 
     fun cleanText(value: String?): String = value.orEmpty()
         .replace("\u00a0", " ")
+        .replace("&amp;", "&")
+        .replace("&#8211;", "-")
+        .replace("&#8217;", "'")
+        .replace("&quot;", "\"")
         .replace(Regex("\\s+"), " ")
         .trim()
 
@@ -161,5 +167,8 @@ object FilmLokalUtils {
             .replace("\\/", "/")
             .replace("&amp;", "&")
             .replace("\\u0026", "&")
+            .replace("\\u003d", "=")
+            .replace("\\u003a", ":")
+            .replace("\\u002f", "/")
     }
 }
