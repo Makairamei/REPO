@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.utils.*
 import kotlinx.coroutines.CancellationException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 class Anichin : MainAPI() {
@@ -150,21 +151,43 @@ class Anichin : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(fixUrl(data)).document
-        var foundLinks = false
+        val candidates = linkedSetOf<String>()
 
+        fun addCandidate(value: String?) {
+            if (value.isNullOrBlank()) return
+            decodeServerUrls(value).forEach { candidates.add(it) }
+        }
+
+        document.select(".mobius option[value], select option[value], option[value]").forEach { server ->
+            addCandidate(server.attr("value"))
+        }
+
+        document.select("iframe[src], embed[src], source[src]").forEach { element ->
+            addCandidate(element.attr("src"))
+        }
+
+        document.select("[data-src], [data-lazy-src], [data-url], [data-link], [data-video], [data-embed], [data-player], [data-file]").forEach { element ->
+            addCandidate(element.attr("data-src"))
+            addCandidate(element.attr("data-lazy-src"))
+            addCandidate(element.attr("data-url"))
+            addCandidate(element.attr("data-link"))
+            addCandidate(element.attr("data-video"))
+            addCandidate(element.attr("data-embed"))
+            addCandidate(element.attr("data-player"))
+            addCandidate(element.attr("data-file"))
+        }
+
+        extractKnownVideoUrls(document.html()).forEach { candidates.add(it) }
+
+        var foundLinks = false
         val safeCallback: (ExtractorLink) -> Unit = { link ->
             foundLinks = true
             callback.invoke(link)
         }
 
-        document.select(".mobius option").forEach { server ->
-            val serverValue = server.attr("value").trim()
-            if (serverValue.isBlank()) return@forEach
-
-            val href = decodeServerUrl(serverValue) ?: return@forEach
-
+        candidates.forEach { href ->
             try {
-                loadExtractor(href, subtitleCallback, safeCallback)
+                loadExtractor(href, data, subtitleCallback, safeCallback)
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
                 Log.w("Anichin", "Failed loading server: $href", error)
@@ -174,15 +197,122 @@ class Anichin : MainAPI() {
         return foundLinks
     }
 
-    private fun decodeServerUrl(value: String): String? {
-        val decoded = runCatching { base64Decode(value) }.getOrNull()?.trim().orEmpty()
-        if (decoded.isBlank()) return null
+    private fun decodeServerUrls(value: String): List<String> {
+        val decodedValues = linkedSetOf<String>()
+        val cleanValue = value.trim().htmlUnescape()
+        if (cleanValue.isBlank()) return emptyList()
 
-        val iframe = Jsoup.parse(decoded).selectFirst("iframe[src]")?.attr("src")?.trim().orEmpty()
-        val rawUrl = iframe.ifBlank {
-            decoded.takeIf { it.startsWith("http://") || it.startsWith("https://") }.orEmpty()
+        decodedValues.add(cleanValue)
+        runCatching { URLDecoder.decode(cleanValue, "UTF-8") }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { decodedValues.add(it.htmlUnescape()) }
+
+        decodeBase64Value(cleanValue)?.let { decodedValues.add(it.htmlUnescape()) }
+
+        return decodedValues
+            .flatMap { extractKnownVideoUrls(it) }
+            .distinct()
+    }
+
+    private fun decodeBase64Value(value: String): String? {
+        val normalized = value.trim()
+        if (normalized.length < 8) return null
+
+        return runCatching { base64Decode(normalized) }.getOrNull()
+            ?: runCatching {
+                val fixed = normalized
+                    .replace('-', '+')
+                    .replace('_', '/')
+                    .let { raw ->
+                        val padding = (4 - raw.length % 4) % 4
+                        raw + "=".repeat(padding)
+                    }
+
+                String(android.util.Base64.decode(fixed, android.util.Base64.DEFAULT))
+            }.getOrNull()
+    }
+
+    private fun extractKnownVideoUrls(rawText: String): List<String> {
+        if (rawText.isBlank()) return emptyList()
+
+        val decodedText = rawText
+            .htmlUnescape()
+            .replace("\\/", "/")
+            .replace("\\u002F", "/")
+            .replace("\\u003A", ":")
+            .replace("\\u003D", "=")
+            .replace("\\u0026", "&")
+            .replace("\\\"", "\"")
+
+        val urls = linkedSetOf<String>()
+
+        Jsoup.parse(decodedText).select("iframe[src], embed[src], source[src], a[href]").forEach { element ->
+            val attr = when {
+                element.hasAttr("src") -> element.attr("src")
+                else -> element.attr("href")
+            }
+            normalizeVideoUrl(attr)?.let { urls.add(it) }
         }
 
-        return rawUrl.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+        Regex("""https?:\\?/\\?/[^"' <>\])]+""")
+            .findAll(decodedText)
+            .mapNotNull { normalizeVideoUrl(it.value) }
+            .forEach { urls.add(it) }
+
+        Regex("""(?i)(?:file|url|src|embed|video)\s*[:=]\s*["']([^"']+)["']""")
+            .findAll(decodedText)
+            .mapNotNull { normalizeVideoUrl(it.groupValues[1]) }
+            .forEach { urls.add(it) }
+
+        return urls.toList()
+    }
+
+    private fun normalizeVideoUrl(url: String): String? {
+        val fixed = url.trim()
+            .trim('"', '\'', ' ', '\n', '\r', '\t')
+            .replace("\\/", "/")
+            .htmlUnescape()
+
+        if (fixed.isBlank()) return null
+
+        val absolute = when {
+            fixed.startsWith("//") -> "https:$fixed"
+            fixed.startsWith("http://") || fixed.startsWith("https://") -> fixed
+            else -> return null
+        }
+
+        val supportedHosts = listOf(
+            "dailymotion.com",
+            "geo.dailymotion.com",
+            "ok.ru",
+            "odnoklassniki.ru",
+            "rumble.com",
+            "rubyvidhub.com",
+            "streamruby.com",
+            "streamruby.net",
+            "vidguard.to",
+            "bembed.net",
+            "listeamed.net",
+            "vgfplay.com",
+            "vidhide",
+            "filelions",
+            "streamwish",
+            "dood"
+        )
+
+        return absolute
+            .takeIf { candidate -> supportedHosts.any { candidate.contains(it, ignoreCase = true) } }
+            ?.let { fixUrl(it) }
+    }
+
+    private fun String.htmlUnescape(): String {
+        return this
+            .replace("&amp;", "&")
+            .replace("&quot;", "\"")
+            .replace("&#039;", "'")
+            .replace("&apos;", "'")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
     }
 }
