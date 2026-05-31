@@ -3,7 +3,6 @@ package com.dubbindo
 import com.dubbindo.BuildConfig
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.Qualities
@@ -11,6 +10,8 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.json.JSONArray
+import org.json.JSONObject
 import java.net.URLEncoder
 
 class DubbindoProvider : MainAPI() {
@@ -576,8 +577,8 @@ class DubbindoProvider : MainAPI() {
             return delivered
         }
 
-        val urls = tryParseJson<List<String>>(data)
-        if (urls != null) {
+        val urls = parseStringList(data)
+        if (urls.isNotEmpty()) {
             var delivered = false
             urls.filter { it.isNotBlank() }.forEach { url ->
                 val success = loadExtractor(url, mainUrl, subtitleCallback, callback)
@@ -591,42 +592,7 @@ class DubbindoProvider : MainAPI() {
 
 
     private fun parseVideoList(data: String): List<Video> {
-        val mapList = tryParseJson<List<Map<String, Any?>>>(data)
-        if (mapList != null) {
-            return mapList.mapNotNull { item ->
-                val src = item["src"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                    ?: item["file"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                    ?: item["url"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                    ?: return@mapNotNull null
-
-                Video(
-                    src = fixUrlNull(src) ?: src,
-                    res = item["res"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                        ?: item["label"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                        ?: item["quality"]?.toString()?.trim()?.takeIf { it.isNotBlank() },
-                    type = item["type"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                )
-            }.distinctBy { it.src }
-        }
-
-        val objectData = tryParseJson<Map<String, Any?>>(data)
-        if (objectData != null) {
-            val src = objectData["src"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                ?: objectData["file"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                ?: objectData["url"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-
-            if (!src.isNullOrBlank()) {
-                return listOf(
-                    Video(
-                        src = fixUrlNull(src) ?: src,
-                        res = objectData["res"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                            ?: objectData["label"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                            ?: objectData["quality"]?.toString()?.trim()?.takeIf { it.isNotBlank() },
-                        type = objectData["type"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-                    )
-                )
-            }
-        }
+        parseJsonVideoList(data).takeIf { it.isNotEmpty() }?.let { return it }
 
         return Regex("""["'](?:src|file|url)["']\s*:\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
             .findAll(data.replace("""\/""", "/").replace("&amp;", "&"))
@@ -645,6 +611,48 @@ class DubbindoProvider : MainAPI() {
             }
             .distinctBy { it.src }
             .toList()
+    }
+
+    private fun parseStringList(data: String): List<String> {
+        return try {
+            val array = JSONArray(data)
+            (0 until array.length()).mapNotNull { index ->
+                array.optString(index).trim().takeIf { it.isNotBlank() }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun parseJsonVideoList(data: String): List<Video> {
+        return try {
+            val trimmed = data.trim()
+            if (trimmed.startsWith("[")) {
+                val array = JSONArray(trimmed)
+                (0 until array.length()).mapNotNull { index ->
+                    array.optJSONObject(index)?.toVideo()
+                }.distinctBy { it.src }
+            } else {
+                JSONObject(trimmed).toVideo()?.let { listOf(it) } ?: emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun JSONObject.toVideo(): Video? {
+        val src = optString("src").trim().takeIf { it.isNotBlank() }
+            ?: optString("file").trim().takeIf { it.isNotBlank() }
+            ?: optString("url").trim().takeIf { it.isNotBlank() }
+            ?: return null
+
+        return Video(
+            src = fixUrlNull(src) ?: src,
+            res = optString("res").trim().takeIf { it.isNotBlank() }
+                ?: optString("label").trim().takeIf { it.isNotBlank() }
+                ?: optString("quality").trim().takeIf { it.isNotBlank() },
+            type = optString("type").trim().takeIf { it.isNotBlank() }
+        )
     }
 
     private fun isDirectVideo(url: String, type: String?): Boolean {
