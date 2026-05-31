@@ -86,10 +86,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=https://anime-indo.lol&sz=%size%",
-        "fileHash": "sha256-822d9dcc76bcd200646128c7a9218ef064823597dfc85dc393a61d296d31ff70",
+        "fileHash": "sha256-c7b0f307f9a76ab497858cc9ffefddc39b56a715cc5630c5410bcb6944315314",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 32673,
+        "fileSize": 34045,
         "status": 1,
         "language": "id",
         "authors": [
@@ -101,7 +101,7 @@
             "Anime",
             "Movie"
         ],
-        "version": 7,
+        "version": 8,
         "internalName": "AnimeIndo",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/AnimeIndo.cs3",
         "name": "AnimeIndo"
