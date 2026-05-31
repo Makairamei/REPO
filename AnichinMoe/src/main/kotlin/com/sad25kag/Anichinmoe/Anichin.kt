@@ -1,14 +1,18 @@
 package com.sad25kag.Anichinmoe
 
-import org.jsoup.nodes.Element
+import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import kotlinx.coroutines.CancellationException
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import java.net.URLEncoder
 
 class Anichin : MainAPI() {
     companion object {
         var context: android.content.Context? = null
     }
+
     override var mainUrl = "https://anichin.moe"
     override var name = "Anichin"
     override val hasMainPage = true
@@ -56,13 +60,14 @@ class Anichin : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val document = app.get("${mainUrl}/${request.data}&page=$page").document
         val home = document.select("div.listupd > article").mapNotNull { it.toSearchResult() }
+
         return newHomePageResponse(
             list = HomePageList(
                 name = request.name,
                 list = home,
-                isHorizontalImages = false
+                isHorizontalImages = false,
             ),
-            hasNext = true
+            hasNext = true,
         )
     }
 
@@ -70,6 +75,7 @@ class Anichin : MainAPI() {
         val title = this.select("div.bsx > a").attr("title").trim()
         val href = fixUrl(this.select("div.bsx > a").attr("href"))
         val posterUrl = fixUrlNull(this.select("div.bsx > a img").attr("src"))
+
         return newAnimeSearchResponse(title, href, TvType.Anime) {
             this.posterUrl = posterUrl
         }
@@ -77,38 +83,42 @@ class Anichin : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val searchResponse = mutableListOf<SearchResponse>()
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+
         for (i in 1..3) {
-            val document = app.get("${mainUrl}/page/$i/?s=$query").document
+            val document = app.get("${mainUrl}/page/$i/?s=$encodedQuery").document
             val results = document.select("div.listupd > article").mapNotNull { it.toSearchResult() }
+
             if (results.isEmpty()) break
             searchResponse.addAll(results)
         }
+
         return searchResponse.distinctBy { it.url }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(fixUrl(url)).document
-        val title = document.selectFirst("h1.entry-title")?.text()?.trim().toString()
+        val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
         var poster = document.select("div.ime > img").attr("src")
         val description = document.selectFirst("div.entry-content")?.text()?.trim()
         val type = document.selectFirst(".spe")?.text().orEmpty()
         val tvType = if (type.contains("Movie", true)) TvType.Movie else TvType.TvSeries
+
         if (poster.isEmpty()) {
             poster = document.selectFirst("meta[property=og:image]")?.attr("content").orEmpty()
         }
 
         return if (tvType == TvType.TvSeries) {
-            val episodes = document.select(".eplister li").map { ep ->
-                val link = fixUrl(ep.selectFirst("a")?.attr("href").orEmpty())
+            val episodes = document.select(".eplister li").mapNotNull { ep ->
+                val link = fixUrl(ep.selectFirst("a")?.attr("href").orEmpty()).takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
                 val epTitle = ep.selectFirst(".epl-title")?.text()?.trim().orEmpty()
                 val epSub = ep.selectFirst(".epl-sub span")?.text()?.trim().orEmpty()
                 val epDate = ep.selectFirst(".epl-date")?.text()?.trim().orEmpty()
-
                 val cleanTitle = epTitle
                     .replace(Regex("Episode\\s*\\d+\\s*Subtitle Indonesia", RegexOption.IGNORE_CASE), "")
                     .replace("Subtitle Indonesia", "")
                     .trim()
-
                 val name = "— $cleanTitle $epSub Indonesia".trim()
                 val desc = if (epDate.isNotEmpty()) "Rilis: $epDate" else null
 
@@ -125,6 +135,7 @@ class Anichin : MainAPI() {
             }
         } else {
             val movieHref = document.selectFirst(".eplister li > a")?.attr("href")?.let { fixUrl(it) } ?: url
+
             newMovieLoadResponse(title, movieHref, TvType.Movie, movieHref) {
                 this.posterUrl = fixUrlNull(poster)
                 this.plot = description
@@ -139,15 +150,39 @@ class Anichin : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(fixUrl(data)).document
+        var foundLinks = false
+
+        val safeCallback: (ExtractorLink) -> Unit = { link ->
+            foundLinks = true
+            callback.invoke(link)
+        }
+
         document.select(".mobius option").forEach { server ->
-            val base64 = server.attr("value")
-            if (base64.isNotBlank()) {
-                val decoded = base64Decode(base64)
-                val doc = Jsoup.parse(decoded)
-                val href = fixUrl(doc.select("iframe").attr("src"))
-                loadExtractor(href, subtitleCallback, callback)
+            val serverValue = server.attr("value").trim()
+            if (serverValue.isBlank()) return@forEach
+
+            val href = decodeServerUrl(serverValue) ?: return@forEach
+
+            try {
+                loadExtractor(href, subtitleCallback, safeCallback)
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                Log.w("Anichin", "Failed loading server: $href", error)
             }
         }
-        return true
+
+        return foundLinks
+    }
+
+    private fun decodeServerUrl(value: String): String? {
+        val decoded = runCatching { base64Decode(value) }.getOrNull()?.trim().orEmpty()
+        if (decoded.isBlank()) return null
+
+        val iframe = Jsoup.parse(decoded).selectFirst("iframe[src]")?.attr("src")?.trim().orEmpty()
+        val rawUrl = iframe.ifBlank {
+            decoded.takeIf { it.startsWith("http://") || it.startsWith("https://") }.orEmpty()
+        }
+
+        return rawUrl.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
     }
 }
