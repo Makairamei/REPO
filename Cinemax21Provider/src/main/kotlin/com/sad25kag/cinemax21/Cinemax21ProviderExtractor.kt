@@ -9,7 +9,6 @@ import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.nicehttp.RequestBodyTypes
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -76,7 +75,7 @@ object Cinemax21ProviderExtractor : Cinemax21Provider() {
                     headers = mapOf("Accept" to "*/*", "X-Requested-With" to "XMLHttpRequest")
                 ).parsedSafe<ResponseHash>() ?: return@amap
 
-                val metrix = parseJson<AesData>(json.embed_url).m
+                val metrix = tryParseJson<AesData>(json.embed_url)?.m ?: return@amap
                 val password = createIdlixKey(json.key, metrix)
                 val decrypted = AesHelper.cryptoAESHandler(json.embed_url, password.toByteArray(), false)
                     ?.fixUrlBloat() ?: return@amap
