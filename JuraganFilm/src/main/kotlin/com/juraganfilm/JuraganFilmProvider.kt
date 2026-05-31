@@ -368,36 +368,57 @@ class JuraganFilmProvider : MainAPI() {
 
     private fun parseEpisodes(document: Document, currentUrl: String, title: String, poster: String?): List<Episode> {
         val episodes = linkedMapOf<String, Episode>()
+        val text = document.text()
         val base = currentUrl.trimEnd('/').replace(Regex("""/\d+$"""), "")
+        val isSeriesLike = currentUrl.contains("/film-seri/", true) ||
+            text.contains("Pilih Episode", true) ||
+            text.contains("Tayangan", true) ||
+            Regex("""\bEPS\s*\d+""", RegexOption.IGNORE_CASE).containsMatchIn(text)
 
-        document.select("a[href]").forEach { anchor ->
-            val href = fixUrl(anchor.attr("href"), currentUrl) ?: return@forEach
-            if (!href.startsWith(base, true) && canonicalUrl(href) != canonicalUrl(base)) return@forEach
-            val label = anchor.text().trim()
-            val episodeNumber = label.toIntOrNull()
-                ?: Regex("""/(\d+)/?$""").find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                ?: return@forEach
-
-            if (episodeNumber <= 0 || episodeNumber > 3000) return@forEach
-            episodes[canonicalUrl(href)] = newEpisode(
-                LoadData(url = href, title = title, poster = poster, episode = episodeNumber).toJson()
+        fun addEpisode(url: String, number: Int?, label: String? = null) {
+            val fixedUrl = fixUrl(url, currentUrl) ?: return
+            val key = canonicalUrl(fixedUrl)
+            if (episodes.containsKey(key)) return
+            episodes[key] = newEpisode(
+                LoadData(url = fixedUrl, title = title, poster = poster, episode = number).toJson()
             ) {
-                this.name = "Episode $episodeNumber"
-                this.episode = episodeNumber
+                this.name = label ?: number?.let { "Episode $it" } ?: title
+                this.episode = number
                 this.posterUrl = poster
             }
         }
 
+        if (isSeriesLike) {
+            val currentEpisode = Regex("""/(\d+)/?$""").find(currentUrl)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+            addEpisode(
+                url = if (currentEpisode <= 1) "$base/" else "${base.trimEnd('/')}/$currentEpisode/",
+                number = currentEpisode,
+                label = "Episode $currentEpisode"
+            )
+        }
+
+        document.select("a[href]").forEach { anchor ->
+            val href = fixUrl(anchor.attr("href"), currentUrl) ?: return@forEach
+            if (!href.startsWith(base, true) && canonicalUrl(href) != canonicalUrl(base)) return@forEach
+
+            val label = anchor.text().trim()
+            val episodeNumber = label.toIntOrNull()
+                ?: Regex("""(?:episode|eps?)\s*(\d{1,4})""", RegexOption.IGNORE_CASE).find(label)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: Regex("""/(\d+)/?$""").find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: return@forEach
+
+            if (episodeNumber <= 0 || episodeNumber > 3000) return@forEach
+            addEpisode(href, episodeNumber, "Episode $episodeNumber")
+        }
+
         if (episodes.isEmpty()) {
             val currentEpisode = Regex("""/(\d+)/?$""").find(currentUrl)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                ?: Regex("""EPS\s*(\d+)""", RegexOption.IGNORE_CASE).find(document.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
-            episodes[canonicalUrl(currentUrl)] = newEpisode(
-                LoadData(url = currentUrl, title = title, poster = poster, episode = currentEpisode).toJson()
-            ) {
-                this.name = currentEpisode?.let { "Episode $it" } ?: title
-                this.episode = currentEpisode
-                this.posterUrl = poster
-            }
+                ?: Regex("""EPS\s*(\d+)""", RegexOption.IGNORE_CASE).find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            addEpisode(
+                url = currentUrl,
+                number = currentEpisode,
+                label = currentEpisode?.let { "Episode $it" } ?: title
+            )
         }
 
         return episodes.values.sortedWith(compareBy<Episode> { it.season ?: 0 }.thenBy { it.episode ?: 0 })
@@ -638,9 +659,10 @@ class JuraganFilmProvider : MainAPI() {
         if (path.isBlank()) return false
         if (path.startsWith("kategori-film/") || path.startsWith("tag/") || path.startsWith("author/") ||
             path.startsWith("page/") || path.startsWith("file/") || path.startsWith("wp-") ||
-            path.startsWith("blog/") || path == "dmca" || path == "disclaimer" || path == "privacy-policy"
+            path.startsWith("blog/") || path == "film-seri" || path.startsWith("film-seri/page/") ||
+            path == "dmca" || path == "disclaimer" || path == "privacy-policy"
         ) return false
-        return path.contains("nonton-") || path.startsWith("film-seri/")
+        return path.startsWith("nonton-") || path.startsWith("film-seri/nonton-")
     }
 
     private fun isUsableTitle(value: String?): Boolean {
@@ -686,6 +708,10 @@ class JuraganFilmProvider : MainAPI() {
         return url.contains(".m3u8", true) || url.contains(".mp4", true) || url.contains(".webm", true)
     }
 
+    private fun isSubtitleMedia(url: String): Boolean {
+        return url.contains(".srt", true) || url.contains(".vtt", true) || url.contains(".ass", true)
+    }
+
     private fun isHls(url: String): Boolean = url.contains(".m3u8", true)
 
     private fun isLikelyPlayable(url: String): Boolean {
@@ -698,10 +724,11 @@ class JuraganFilmProvider : MainAPI() {
 
     private fun isBadUrl(url: String): Boolean {
         val value = url.lowercase()
+        if (isDirectMedia(value) || isSubtitleMedia(value)) return false
         return listOf(
             "facebook.com", "twitter.com", "api.whatsapp.com", "telegram", "instagram.com", "youtube.com",
             "googlesyndication", "doubleclick", "ads", "banner", "neoparty", "klik4.me", "pasang-iklan",
-            "dmca", "privacy", "disclaimer", "wp-content", "wp-json", "wp-admin", "xmlrpc.php"
+            "dmca", "privacy", "disclaimer", "wp-json", "wp-admin", "xmlrpc.php"
         ).any { value.contains(it) }
     }
 
