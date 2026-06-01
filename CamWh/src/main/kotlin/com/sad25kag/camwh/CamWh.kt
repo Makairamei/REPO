@@ -182,7 +182,7 @@ class CamWh : MainAPI() {
 
         suspend fun emitDirect(rawUrl: String?, label: String = name) {
             val videoUrl = rawUrl
-                ?.decodeEscapedUrl()
+                ?.resolveCamWhVideoUrl()
                 ?.takeIf { it.isNotBlank() }
                 ?: return
 
@@ -195,20 +195,44 @@ class CamWh : MainAPI() {
                     url = videoUrl,
                     type = inferType(videoUrl)
                 ) {
-                    this.referer = data
+                    this.referer = "$mainUrl/"
                     this.quality = getQualityFromName(label)
-                    this.headers = streamHeaders(data)
+                    this.headers = streamHeaders()
                 }
             )
+        }
+
+        suspend fun String.resolveCamWhVideoUrl(): String? {
+            val decoded = decodeEscapedUrl()
+                .removePrefix("function/0/")
+                .trim()
+
+            if (decoded.isBlank()) return null
+            if (decoded.contains("videos_screenshots", ignoreCase = true)) return null
+            if (decoded.contains("/screenshots/", ignoreCase = true)) return null
+            if (decoded.endsWith(".jpg", ignoreCase = true) || decoded.endsWith(".png", ignoreCase = true)) return null
+
+            val fixed = fixUrl(decoded)
+            if (!fixed.contains("/get_file/", ignoreCase = true)) return fixed
+
+            return runCatching {
+                app.get(
+                    fixed,
+                    headers = streamHeaders(),
+                    referer = "$mainUrl/",
+                    allowRedirects = false
+                ).headers["Location"] ?: fixed
+            }.getOrDefault(fixed)
         }
 
         suspend fun extractFromHtml(html: String) {
             val patterns = listOf(
                 Regex("""video_alt_url\d*\s*[:=]\s*['"]([^'"]+)""", RegexOption.IGNORE_CASE),
                 Regex("""video_url\d*\s*[:=]\s*['"]([^'"]+)""", RegexOption.IGNORE_CASE),
+                Regex("""contentUrl"\s*:\s*"([^"]+/get_file/3/[^"]+)""", RegexOption.IGNORE_CASE),
                 Regex("""file\s*[:=]\s*['"]([^'"]+\.(?:mp4|m3u8)[^'"]*)""", RegexOption.IGNORE_CASE),
                 Regex("""source\s*[:=]\s*['"]([^'"]+\.(?:mp4|m3u8)[^'"]*)""", RegexOption.IGNORE_CASE),
-                Regex("""['"](https?://[^'"]+/(?:get_file|contents|videos)/[^'"]+)['"]""", RegexOption.IGNORE_CASE),
+                Regex("""['"](https?://[^'"]+/get_file/3/[^'"]+)['"]""", RegexOption.IGNORE_CASE),
                 Regex("""['"](https?://[^'"]+\.(?:mp4|m3u8)(?:\?[^'"]*)?)['"]""", RegexOption.IGNORE_CASE)
             )
 
@@ -275,7 +299,8 @@ class CamWh : MainAPI() {
         if (capturedFileUrl.isNotBlank()) {
             val redirected = app.get(
                 capturedFileUrl,
-                headers = streamHeaders(data),
+                headers = streamHeaders(),
+                referer = "$mainUrl/",
                 allowRedirects = false
             ).headers["Location"] ?: capturedFileUrl
 
@@ -325,12 +350,13 @@ class CamWh : MainAPI() {
         }
     }
 
-    private fun streamHeaders(refererUrl: String): Map<String, String> {
+    private fun streamHeaders(): Map<String, String> {
         return mapOf(
             "Accept" to "*/*",
             "User-Agent" to USER_AGENT,
-            "Referer" to refererUrl,
-            "Origin" to mainUrl
+            "Referer" to "$mainUrl/",
+            "Origin" to mainUrl,
+            "Range" to "bytes=0-"
         )
     }
 
