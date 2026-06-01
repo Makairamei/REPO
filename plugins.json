@@ -820,10 +820,10 @@
     },
     {
         "iconUrl": "https://free-reels.com/free-reels.png",
-        "fileHash": "sha256-8ceb953e7755aaedc03bb988735549299db8cc284edb093b10ac8a0b390df6fc",
+        "fileHash": "sha256-d2e3e68379750b9eeb848a4973a1c6b9f09e8a05e563d1625b6c24cb42ec8de6",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 37274,
+        "fileSize": 36314,
         "status": 1,
         "language": "id",
         "authors": [
@@ -834,7 +834,7 @@
             "Anime",
             "AsianDrama"
         ],
-        "version": 32,
+        "version": 33,
         "internalName": "FreeReels",
         "description": "FreeReels / DramaWave short drama provider",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/FreeReels.cs3",
