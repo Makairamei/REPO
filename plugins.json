@@ -300,10 +300,10 @@
     },
     {
         "iconUrl": "https://play-lh.googleusercontent.com/G9s84Cm1TDnKDX2P8nipS_s60cuCnYtjBRRLespF8nivjXmbV9tF1fY37clZhXMLaA",
-        "fileHash": "sha256-b96191f9f31122244f8171f249d4e251dc778bbef43a32390294664f16edccee",
+        "fileHash": "sha256-a018ba44f69d3bfa94e72a7ad864c69f771552ed2cee9659ff6272236ee2bcb6",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 82866,
+        "fileSize": 80298,
         "status": 3,
         "language": "id",
         "authors": [
@@ -314,7 +314,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 9,
+        "version": 10,
         "internalName": "BilibiliProvider",
         "description": "Bilibili TV - Anime, film, serial, dan konten Asia dari bilibili.tv",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/BilibiliProvider.cs3",
