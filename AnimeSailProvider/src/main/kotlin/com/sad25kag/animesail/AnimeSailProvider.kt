@@ -25,6 +25,7 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import org.json.JSONObject
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -347,8 +348,45 @@ class AnimeSailProvider : MainAPI() {
                 )
             }
 
-            normalized.contains("player-kodir.aghanim.xyz", true) ||
-                normalized.contains("${playerPath}kodir2", true) ||
+            normalized.contains("player-kodir.aghanim.xyz", true) -> {
+                if (tryPlayerKodirDirect(normalized, serverName, quality, subtitleCallback, callback)) return
+                val response = request(normalized, ref = referer)
+                val text = response.text
+                val playerDoc = response.document
+
+                val nestedLinks = linkedSetOf<String>()
+                playerDoc.select("script[src]").forEach { script ->
+                    normalizeUrlFromBase(script.attr("src"), normalized)?.let(nestedLinks::add)
+                }
+                nestedLinks.addAll(extractCandidatesFromText(text, normalized))
+
+                if (nestedLinks.isEmpty()) {
+                    loadFixedExtractor(
+                        url = normalized,
+                        serverName = serverName,
+                        quality = quality,
+                        referer = referer,
+                        subtitleCallback = subtitleCallback,
+                        callback = callback
+                    )
+                    return
+                }
+
+                nestedLinks.forEach { nested ->
+                    resolveMirrorLink(
+                        rawUrl = nested,
+                        referer = normalized,
+                        playerPath = playerPath,
+                        serverName = serverName,
+                        quality = quality,
+                        visitedUrls = visitedUrls,
+                        subtitleCallback = subtitleCallback,
+                        callback = callback
+                    )
+                }
+            }
+
+            normalized.contains("${playerPath}kodir2", true) ||
                 normalized.contains("${playerPath}framezilla", true) ||
                 normalized.contains("uservideo.xyz", true) ||
                 normalized.contains(playerPath, true) -> {
@@ -654,6 +692,105 @@ class AnimeSailProvider : MainAPI() {
             }
             else -> false
         }
+    }
+
+    private fun getQueryParam(url: String, name: String): String? {
+        val rawQuery = runCatching { URI(url).rawQuery }.getOrNull() ?: return null
+        return rawQuery.split("&")
+            .mapNotNull { item ->
+                val key = item.substringBefore("=", "")
+                val value = item.substringAfter("=", "")
+                if (key == name && value.isNotBlank()) {
+                    runCatching { URLDecoder.decode(value, "UTF-8") }.getOrElse { value }
+                } else null
+            }
+            .firstOrNull()
+    }
+
+    private suspend fun tryPlayerKodirDirect(
+        url: String,
+        serverName: String,
+        quality: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val id = getQueryParam(url, "id") ?: return false
+        val token = getQueryParam(url, "token") ?: return false
+        val playerOrigin = "https://player-kodir.aghanim.xyz"
+        val apiUrl = "$playerOrigin?api=init&id=$id&token=$token"
+        val apiResponse = runCatching {
+            app.get(
+                apiUrl,
+                referer = url,
+                headers = mapOf(
+                    "User-Agent" to USER_AGENT,
+                    "Referer" to url,
+                    "Origin" to playerOrigin,
+                    "Accept" to "application/json, text/plain, */*"
+                )
+            ).text
+        }.getOrNull() ?: return false
+
+        val player = runCatching {
+            JSONObject(apiResponse)
+                .optJSONObject("data")
+                ?.optJSONObject("player")
+        }.getOrNull() ?: return false
+
+        var emitted = false
+        val sources = player.optJSONArray("sources")
+        if (sources != null) {
+            for (i in 0 until sources.length()) {
+                val source = sources.optJSONObject(i) ?: continue
+                val sourceUrl = source.optString("url").takeIf { it.isNotBlank() } ?: continue
+                val sourceLabel = source.optString("name").takeIf { it.isNotBlank() } ?: "Kodir"
+                val metadata = source.optJSONObject("metadata")
+                val accessToken = metadata?.optString("access_token")?.takeIf { it.isNotBlank() }
+                val isDriveApi = sourceUrl.contains("googleapis.com/drive", ignoreCase = true)
+                val linkHeaders = mutableMapOf("User-Agent" to USER_AGENT)
+
+                if (isDriveApi) {
+                    linkHeaders["Origin"] = playerOrigin
+                    if (!accessToken.isNullOrBlank()) {
+                        linkHeaders["Authorization"] = "Bearer $accessToken"
+                    }
+                }
+
+                callback.invoke(
+                    newExtractorLink(
+                        source = "AnimeSail Kodir",
+                        name = "$serverName - $sourceLabel",
+                        url = sourceUrl,
+                        type = if (sourceUrl.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    ) {
+                        this.referer = if (isDriveApi) playerOrigin else ""
+                        this.quality = quality ?: Qualities.Unknown.value
+                        this.headers = linkHeaders
+                    }
+                )
+                emitted = true
+            }
+        }
+
+        val mirrors = player.optJSONArray("mirrors")
+        if (mirrors != null) {
+            for (i in 0 until mirrors.length()) {
+                val mirror = mirrors.optJSONObject(i) ?: continue
+                if (!mirror.optBoolean("alive", true)) continue
+                val embedUrl = mirror.optString("embedUrl").takeIf { it.isNotBlank() } ?: continue
+                val mirrorName = mirror.optString("service").takeIf { it.isNotBlank() } ?: serverName
+                loadFixedExtractor(
+                    url = embedUrl,
+                    serverName = "$serverName - $mirrorName",
+                    quality = quality,
+                    referer = playerOrigin,
+                    subtitleCallback = subtitleCallback,
+                    callback = callback
+                )
+            }
+        }
+
+        return emitted
     }
 
     private suspend fun tryPixeldrainDirect(
