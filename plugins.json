@@ -381,10 +381,10 @@
     },
     {
         "iconUrl": "https://klikxxi.me/wp-content/uploads/2024/02/cropped-site-icon.png",
-        "fileHash": "sha256-219b16134c080eae192e435bac2771928b58a06ab9f8830adfcd9c22d824dbeb",
+        "fileHash": "sha256-48ccfafbab92a715b55aef69f23eb3a7ed892f54176a6ad44a8f2b68c6c5c64a",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 237801,
+        "fileSize": 237319,
         "status": 1,
         "language": "id",
         "authors": [
@@ -395,7 +395,7 @@
             "TvSeries",
             "Movie"
         ],
-        "version": 5,
+        "version": 6,
         "internalName": "Cinemax21Provider",
         "description": "CineMax21 \u2014 Streaming Movie and TV Series",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/Cinemax21Provider.cs3",
