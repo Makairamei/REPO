@@ -603,10 +603,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://drama-id.com&size=%size%",
-        "fileHash": "sha256-97492657aaf26427ed89d4e25c02d261e7f8aeaca20f173d016b01dd7dd731b7",
+        "fileHash": "sha256-3c1d2c03d1bdfc03fea9165ffc720f9a2a0f9599862728e399b4a37a63a5ea3b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 46593,
+        "fileSize": 45607,
         "status": 1,
         "language": "id",
         "authors": [
@@ -617,7 +617,7 @@
             "TvSeries",
             "Movie"
         ],
-        "version": 8,
+        "version": 9,
         "internalName": "DramaIdProvider",
         "description": "DramaID - drama Asia subtitle Indonesia.",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/DramaIdProvider.cs3",
