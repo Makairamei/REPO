@@ -361,10 +361,10 @@
     },
     {
         "iconUrl": "https://camwh.com/contents/ugmtofwqltgh/theme/logo.png",
-        "fileHash": "sha256-34562fe55e0ac1dc29b17c668b5b6203b980ec7baf812fa0b3e328b3571be437",
+        "fileHash": "sha256-a8bcf6664de244ef6b53820d29e1a2cfff2887c160e6e1a6a9edee7180b18763",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 21730,
+        "fileSize": 22570,
         "status": 1,
         "language": "id",
         "authors": [
@@ -373,7 +373,7 @@
         "tvTypes": [
             "NSFW"
         ],
-        "version": 8,
+        "version": 10,
         "internalName": "CamWh",
         "description": "Provider NSFW untuk konten video dewasa dari CamWH.",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/CamWh.cs3",
