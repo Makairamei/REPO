@@ -108,11 +108,11 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=animekhor.org&sz=%size%",
-        "jarFileSize": 120033,
-        "fileHash": "sha256-f8027d8c693e4e595feafbf20743a234cb00975b31b7cfccd4023a2f226c4937",
+        "jarFileSize": 113905,
+        "fileHash": "sha256-accf7ba050e64eb20bbef58c6b1b33db6e9fd5297b74b684cd56303c67a3c049",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 30814,
+        "fileSize": 29481,
         "status": 1,
         "language": "id",
         "authors": [
@@ -122,13 +122,13 @@
             "AnimeMovie",
             "Anime"
         ],
-        "version": 15,
+        "version": 16,
         "internalName": "Animekhor",
         "jarUrl": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/Animekhor.jar",
         "description": "Anime and Movies includes (Donghuaword)",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/Animekhor.cs3",
         "name": "Animekhor",
-        "jarHash": "sha256-0b27b0dbf1edfce58b4de41f69eeb0dfd741e1437576e7ce3a4111f46daebf92"
+        "jarHash": "sha256-2c65829506b97d9e74b9851de92128076d73a90d1382b11d5e5c994666b867de"
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://154.26.137.28&size=%size%",
