@@ -175,10 +175,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://anixcafe.com&size=%size%",
-        "fileHash": "sha256-f8b7b31affd2a5e6cb5265e20617556a9eb57a386ccc7a3dae2368c70f14bc2d",
+        "fileHash": "sha256-c0b962d95a46eaa314096c0c997198088155d02da0ecbdb2d9784f1708ddb3ad",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 33140,
+        "fileSize": 41143,
         "status": 1,
         "language": "id",
         "authors": [
@@ -189,7 +189,7 @@
             "OVA",
             "Anime"
         ],
-        "version": 3,
+        "version": 4,
         "internalName": "AnixCafeProvider",
         "description": "AnixCafe / Anixverse donghua provider with safer core categories and guarded playback resolver",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/AnixCafeProvider.cs3",
