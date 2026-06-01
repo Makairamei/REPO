@@ -302,7 +302,7 @@ class DrakoridProvider : MainAPI() {
         }.getOrNull()
     }
 
-    private fun emitDrakorIdPlayer(
+    private suspend fun emitDrakorIdPlayer(
         embedUrl: String,
         pageUrl: String,
         callback: (ExtractorLink) -> Unit
