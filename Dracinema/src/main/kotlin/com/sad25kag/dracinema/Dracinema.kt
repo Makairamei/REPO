@@ -449,6 +449,20 @@ class Dracinema : MainAPI() {
         return sources.values.toList()
     }
 
+
+    private fun extractMediaUrls(text: String): List<String> {
+        val clean = text.cleanEscaped()
+        val urls = linkedSetOf<String>()
+
+        Regex("""https?://[^\"'\s<>)\]}]+""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .map { it.value.cleanEscaped().trimEnd('.', ',', ';') }
+            .filterNot { it.isNoiseUrl() }
+            .forEach { urls.add(it) }
+
+        return urls.toList()
+    }
+
     private fun String.isDracinemaVideoUrl(): Boolean {
         val lower = lowercase()
         return lower.contains("awscdn.netshort.com") || lower.contains("mime_type=video_mp4") || lower.contains(".mp4") || lower.contains(".m3u8") || lower.contains(".webm")
