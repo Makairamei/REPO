@@ -424,11 +424,11 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=www.dailymotion.com&sz=%size%",
-        "jarFileSize": 111341,
-        "fileHash": "sha256-a0b8b1ebc6f8322843a1f8351ad678e1dc21dab0459f820b9e975284e7103841",
+        "jarFileSize": 114438,
+        "fileHash": "sha256-0b53d7032c01030482fd6a9e637b76698254428d75255d50a522acd7d2bdcc45",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 28171,
+        "fileSize": 28530,
         "status": 1,
         "authors": [
             "BetbetMiro"
@@ -442,13 +442,13 @@
             "Cartoon",
             "Others"
         ],
-        "version": 8,
+        "version": 9,
         "internalName": "DailymotionProvider",
         "jarUrl": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/DailymotionProvider.jar",
         "description": "Dailymotion public video catalog with fixed populated category rows for anime, drama, movie, country, WWE, RAW, and SmackDown.",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/DailymotionProvider.cs3",
         "name": "DailymotionProvider",
-        "jarHash": "sha256-38c7481daea5a22162f6403777bff0ae9c84e2da8b7a67b67a7566dd42ec3ed8"
+        "jarHash": "sha256-7364513d622ce7d850936a38c36ecf2ca07c35aedfdc86b4f11c71813613a117"
     },
     {
         "iconUrl": "https://shorts.desisins.com/wp-content/uploads/2023/04/cropped-favicon-2-32x32.png",
