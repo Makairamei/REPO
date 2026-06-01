@@ -862,10 +862,10 @@
     },
     {
         "iconUrl": "https://ui-avatars.com/api/?name=Gerakin21&background=1c1c1c&color=ffeb3b&size=256&font-size=0.5",
-        "fileHash": "sha256-c5826dd6a01e9e2d2675651b49f3e0b447e1b0725cc53cad4bd4dbc402a09312",
+        "fileHash": "sha256-9457a055c7d3311fc9d759cbbc133698b2ba1e72ecda516a6c2d01ac3d93430f",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 35373,
+        "fileSize": 40186,
         "status": 1,
         "language": "id",
         "authors": [
@@ -875,7 +875,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 6,
+        "version": 8,
         "internalName": "Gerakin21",
         "description": "Provider CloudStream untuk Gerakin21.",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/Gerakin21.cs3",
