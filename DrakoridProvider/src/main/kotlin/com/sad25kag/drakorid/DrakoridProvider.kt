@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.base64Decode
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
@@ -20,15 +21,17 @@ import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.json.JSONObject
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 class DrakoridProvider : MainAPI() {
@@ -219,7 +222,7 @@ class DrakoridProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val linkData = runCatching { parseJson<LinkData>(data) }.getOrNull()
+        val linkData = data.toLinkData()
         if (linkData == null || linkData.slug.isBlank()) return false
 
         val methods = listOf("fast", "lite", "max")
@@ -256,8 +259,12 @@ class DrakoridProvider : MainAPI() {
                         src.takeIf { s -> s.startsWith("http") }
                     }
                     .forEach { embedUrl ->
-                        loadExtractor(embedUrl, pageUrl, subtitleCallback, callback)
-                        anySourceFound = true
+                        if (emitDrakorIdPlayer(embedUrl, pageUrl, callback)) {
+                            anySourceFound = true
+                        } else {
+                            loadExtractor(embedUrl, pageUrl, subtitleCallback, callback)
+                            anySourceFound = true
+                        }
                     }
             }.onFailure { e ->
                 e.printStackTrace()
@@ -282,6 +289,67 @@ class DrakoridProvider : MainAPI() {
         }
 
         return anySourceFound
+    }
+
+
+    private fun String.toLinkData(): LinkData? {
+        return runCatching {
+            val json = JSONObject(this)
+            LinkData(
+                slug = json.optString("slug").trim(),
+                episode = json.optInt("episode", 1).takeIf { it > 0 } ?: 1
+            )
+        }.getOrNull()
+    }
+
+    private fun emitDrakorIdPlayer(
+        embedUrl: String,
+        pageUrl: String,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        if (!embedUrl.contains("/player/bunny.php", ignoreCase = true)) return false
+
+        val video = embedUrl.extractQueryParam("v")
+            ?.decodeDrakorIdBase64Url()
+            ?.takeIf { it.startsWith("http", ignoreCase = true) }
+            ?: return false
+
+        val quality = getQualityFromName(video).let {
+            if (it == Qualities.Unknown.value) inferQuality(video) else it
+        }
+
+        callback.invoke(
+            newExtractorLink(
+                source = name,
+                name = "$name Bunny ${qualityLabel(quality)}",
+                url = video,
+                type = if (video.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+            ) {
+                this.quality = quality
+                this.referer = mainUrl
+                this.headers = baseHeaders + mapOf(
+                    "Referer" to pageUrl,
+                    "Origin" to mainUrl
+                )
+            }
+        )
+        return true
+    }
+
+    private fun String.extractQueryParam(name: String): String? {
+        return substringAfter("?", "")
+            .split("&")
+            .firstOrNull { it.substringBefore("=") == name }
+            ?.substringAfter("=", "")
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun String.decodeDrakorIdBase64Url(): String? {
+        val decodedParam = runCatching { URLDecoder.decode(this, "UTF-8") }.getOrDefault(this)
+        val padded = decodedParam.replace(" ", "+").let { value ->
+            value + "=".repeat((4 - value.length % 4) % 4)
+        }
+        return runCatching { base64Decode(padded) }.getOrNull()
     }
 
     // FIX #1 (continued): requestHeaders() no longer injects "Cookie" into the headers map.
