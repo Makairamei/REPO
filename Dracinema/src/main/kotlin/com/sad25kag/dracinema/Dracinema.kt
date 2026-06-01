@@ -416,10 +416,7 @@ class Dracinema : MainAPI() {
 
     private fun String.toPlayUrl(targetEpisode: Int?): String {
         val clean = substringBefore("?episode=").trimEnd('/')
-        if (clean.contains("/play/", true)) {
-            val trailingEpisode = clean.substringAfterLast('/').toIntOrNull()
-            return if (trailingEpisode == 1) clean.substringBeforeLast('/') else clean
-        }
+        if (clean.contains("/play/", true)) return clean
         val movieKey = clean.substringAfter("/movie/", "").substringBefore("?").trim('/').takeIf { it.isNotBlank() }
             ?: return clean
         val base = "$mainUrl/play/$movieKey"
