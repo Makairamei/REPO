@@ -9,5 +9,6 @@ class AnixCafeProviderPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(AnixCafeProvider())
         registerExtractorAPI(Playmogo())
+        registerExtractorAPI(AnixCafeVideoplayer())
     }
 }

@@ -12,8 +12,11 @@ import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.Jsoup
+import org.json.JSONObject
 import java.net.URI
+import java.net.URLEncoder
 import java.util.Base64
+import kotlin.random.Random
 
 class Playmogo : AnixCafeGenericExtractor() {
     override val name = "Playmogo"
@@ -96,6 +99,9 @@ object AnixCafeExtractorHelper {
             emitDirectLink(fixedUrl, label, referer, callback)
             return
         }
+
+        if (resolveDailymotion(fixedUrl, label, referer, callback)) return
+        if (resolvePlaymogo(fixedUrl, label, referer, callback)) return
 
         if (useGenericExtractor) {
             runCatching { loadExtractor(fixedUrl, referer, subtitleCallback, callback) }
@@ -191,6 +197,163 @@ object AnixCafeExtractorHelper {
 
     fun isUnsupportedPlayerFrame(url: String): Boolean {
         return false
+    }
+
+
+    private suspend fun resolveDailymotion(
+        url: String,
+        label: String,
+        referer: String,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val videoId = extractDailymotionId(url) ?: return false
+        val encodedReferer = URLEncoder.encode(referer, "UTF-8")
+        val metaUrl = "https://geo.dailymotion.com/video/$videoId.json?legacy=true&embedder=$encodedReferer&geo=1&player-id=xir9o&publisher-id=x2fn6ma&locale=id"
+
+        val jsonText = runCatching {
+            app.get(
+                metaUrl,
+                referer = referer,
+                headers = mapOf("Referer" to referer),
+                timeout = 15000L
+            ).text
+        }.getOrNull()
+
+        val qualities = runCatching {
+            JSONObject(jsonText ?: "").optJSONObject("qualities")
+        }.getOrNull()
+
+        var emitted = false
+
+        if (qualities != null) {
+            val keys = qualities.keys()
+            while (keys.hasNext()) {
+                val qualityKey = keys.next()
+                val entries = qualities.optJSONArray(qualityKey) ?: continue
+                for (index in 0 until entries.length()) {
+                    val source = entries.optJSONObject(index) ?: continue
+                    val sourceUrl = source.optString("url").takeIf { it.isNotBlank() } ?: continue
+                    val type = source.optString("type")
+                    if (!sourceUrl.contains(".m3u8", ignoreCase = true) && !type.contains("mpegURL", ignoreCase = true)) continue
+
+                    callback(
+                        newExtractorLink(
+                            source = "Dailymotion",
+                            name = if (qualityKey.equals("auto", ignoreCase = true)) "Dailymotion" else "Dailymotion [$qualityKey]",
+                            url = sourceUrl.cleanEscaped(),
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            this.referer = referer
+                            this.headers = mapOf("Referer" to referer)
+                            this.quality = getQualityFromName(qualityKey)
+                        }
+                    )
+                    emitted = true
+                }
+            }
+        }
+
+        if (emitted) return true
+
+        val page = runCatching {
+            app.get(url, referer = referer, headers = mapOf("Referer" to referer), timeout = 15000L).text.cleanEscaped()
+        }.getOrNull() ?: return false
+
+        Regex("""https?://[^"'\\\s<>]+?\.m3u8[^"'\\\s<>]*""", RegexOption.IGNORE_CASE)
+            .findAll(page)
+            .map { it.value.cleanEscaped() }
+            .distinct()
+            .forEach { sourceUrl ->
+                callback(
+                    newExtractorLink(
+                        source = "Dailymotion",
+                        name = "Dailymotion",
+                        url = sourceUrl,
+                        type = ExtractorLinkType.M3U8
+                    ) {
+                        this.referer = referer
+                        this.headers = mapOf("Referer" to referer)
+                    }
+                )
+                emitted = true
+            }
+
+        return emitted
+    }
+
+    private suspend fun resolvePlaymogo(
+        url: String,
+        label: String,
+        referer: String,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        if (!url.contains("playmogo.com/e/", ignoreCase = true)) return false
+
+        val page = runCatching {
+            app.get(
+                url,
+                referer = referer,
+                headers = mapOf("Referer" to referer),
+                timeout = 15000L
+            ).text.cleanEscaped()
+        }.getOrNull() ?: return false
+
+        val passPath = Regex("""\$\.\get\(['"]([^'"]*?/pass_md5/[^'"]+)['"]""")
+            .find(page)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?: return false
+
+        val passUrl = normalizeUrl(passPath, url) ?: return false
+        val token = passPath.substringBefore("?").trimEnd('/').substringAfterLast("/")
+            .takeIf { it.isNotBlank() }
+            ?: return false
+
+        val mediaPrefix = runCatching {
+            app.get(
+                passUrl,
+                referer = url,
+                headers = mapOf("Referer" to url),
+                timeout = 15000L
+            ).text.trim()
+        }.getOrNull()
+            ?.takeIf { it.startsWith("http", ignoreCase = true) && !it.equals("RELOAD", ignoreCase = true) }
+            ?: return false
+
+        val directUrl = mediaPrefix + randomAlphaNum(10) + "?token=$token&expiry=${System.currentTimeMillis()}"
+        callback(
+            newExtractorLink(
+                source = "Playmogo",
+                name = if (label.isBlank()) "Playmogo" else "Playmogo [$label]",
+                url = directUrl,
+                type = ExtractorLinkType.VIDEO
+            ) {
+                this.referer = url
+                this.headers = mapOf("Referer" to url)
+                this.quality = getQualityFromName(label)
+            }
+        )
+        return true
+    }
+
+    private fun extractDailymotionId(url: String): String? {
+        return Regex("""(?:video=|/video/)([A-Za-z0-9]+)""")
+            .find(url)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?: Regex("""dailymotion\.com/embed/video/([A-Za-z0-9]+)""")
+                .find(url)
+                ?.groupValues
+                ?.getOrNull(1)
+    }
+
+    private fun randomAlphaNum(length: Int): String {
+        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        return buildString {
+            repeat(length) {
+                append(chars[Random.nextInt(chars.length)])
+            }
+        }
     }
 
     private suspend fun emitDirectLink(
