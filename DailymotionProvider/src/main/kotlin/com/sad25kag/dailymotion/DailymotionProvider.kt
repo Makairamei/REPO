@@ -2,7 +2,9 @@ package com.sad25kag.dailymotion
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import java.net.URLEncoder
@@ -124,7 +126,7 @@ class DailymotionProvider : MainAPI() {
 
         return app.get(apiUrl, headers = apiHeaders)
             .text
-            .let { tryParseJson<VideoSearchResponse>(it) }
+            .let { parseDailymotionJson<VideoSearchResponse>(it) }
             ?.list
             .orEmpty()
             .mapNotNull { it.toSearchResponse(inferTypeFromTitle(it.title.orEmpty())) }
@@ -139,7 +141,7 @@ class DailymotionProvider : MainAPI() {
         val apiUrl = "$apiBase/video/$videoId?fields=$videoFields"
         val detail = app.get(apiUrl, headers = apiHeaders)
             .text
-            .let { tryParseJson<VideoDetailResponse>(it) }
+            .let { parseDailymotionJson<VideoDetailResponse>(it) }
             ?: throw ErrorLoadingException("Detail video Dailymotion tidak ditemukan")
 
         return detail.toLoadResponse(forcedType)
@@ -228,7 +230,7 @@ class DailymotionProvider : MainAPI() {
 
         return app.get(apiUrl, headers = apiHeaders)
             .text
-            .let { tryParseJson<VideoSearchResponse>(it) }
+            .let { parseDailymotionJson<VideoSearchResponse>(it) }
     }
 
     private suspend fun fetchFallbackRows(query: String, page: Int): List<VideoItem> {
@@ -396,6 +398,11 @@ class DailymotionProvider : MainAPI() {
         "Referer" to "$mainUrl/"
     )
 
+
+    private inline fun <reified T> parseDailymotionJson(text: String): T? {
+        return runCatching { dailymotionJsonMapper.readValue<T>(text) }.getOrNull()
+    }
+
     private data class CategoryData(
         val apiQuery: String,
         val type: TvType
@@ -445,5 +452,7 @@ class DailymotionProvider : MainAPI() {
 
     companion object {
         private const val LINK_SEPARATOR = "|||DM|||"
+        private val dailymotionJsonMapper = jacksonObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
     }
 }

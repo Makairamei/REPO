@@ -1,4 +1,4 @@
-version = 8
+version = 9
 
 cloudstream {
     description = "Dailymotion public video catalog with fixed populated category rows for anime, drama, movie, country, WWE, RAW, and SmackDown."
