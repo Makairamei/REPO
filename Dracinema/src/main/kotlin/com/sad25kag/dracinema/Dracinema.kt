@@ -303,42 +303,77 @@ class Dracinema : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val pageUrl = data.substringBefore("?episode=")
         val targetEpisode = data.substringAfter("?episode=", "").substringBefore("&").toIntOrNull()
-        val response = app.get(pageUrl, headers = commonHeaders, referer = mainUrl)
-        val document = response.document
-        val html = response.text.cleanEscaped()
-
-        val directLinks = linkedSetOf<String>()
-        val embedLinks = linkedSetOf<String>()
+        val playUrl = data.toPlayUrl(targetEpisode)
         val emitted = linkedSetOf<String>()
         var found = false
 
-        fun addCandidate(raw: String?, base: String = pageUrl) {
+        val pageTexts = mutableListOf<String>()
+        runCatching {
+            app.get(playUrl, headers = commonHeaders, referer = mainUrl).text
+        }.getOrNull()?.let(pageTexts::add)
+
+        if (pageTexts.none { it.contains("videoUrls", true) || it.contains("awscdn.netshort.com", true) }) {
+            runCatching {
+                app.get(
+                    "$playUrl?_rsc=1",
+                    headers = commonHeaders + mapOf("RSC" to "1", "Accept" to "*/*"),
+                    referer = playUrl
+                ).text
+            }.getOrNull()?.let(pageTexts::add)
+        }
+
+        pageTexts.flatMap { extractDracinemaVideoSources(it) }
+            .distinctBy { it.url.substringBefore("&Expires=").substringBefore("?Expires=") }
+            .forEach { source ->
+                val key = source.url.substringBefore("&Expires=").substringBefore("?Expires=")
+                if (!emitted.add(key)) return@forEach
+
+                if (source.url.contains(".m3u8", true)) {
+                    generateM3u8(name, source.url, playUrl).forEach {
+                        callback(it)
+                        found = true
+                    }
+                } else {
+                    callback(
+                        newExtractorLink(name, "Dracinema ${source.quality ?: Qualities.Unknown.value}p", source.url, ExtractorLinkType.VIDEO) {
+                            referer = mainUrl
+                            quality = source.quality ?: Qualities.P720.value
+                            headers = mapOf(
+                                "Accept" to "*/*",
+                                "Range" to "bytes=0-"
+                            )
+                        }
+                    )
+                    found = true
+                }
+            }
+
+        if (found) return true
+
+        val directLinks = linkedSetOf<String>()
+        val embedLinks = linkedSetOf<String>()
+
+        fun addCandidate(raw: String?, base: String = playUrl) {
             val fixed = raw?.cleanEscaped()?.absoluteUrl(base) ?: return
             if (fixed.isNoiseUrl()) return
             when {
-                fixed.contains(".m3u8", true) || fixed.contains(".mp4", true) || fixed.contains(".webm", true) -> directLinks.add(fixed)
+                fixed.contains(".m3u8", true) || fixed.contains(".mp4", true) || fixed.contains(".webm", true) || fixed.contains("awscdn.netshort.com", true) -> directLinks.add(fixed)
                 fixed.startsWith("http", true) -> embedLinks.add(fixed)
             }
         }
 
-        extractMediaUrls(html).forEach { addCandidate(it) }
+        pageTexts.forEach { text -> extractMediaUrls(text).forEach { addCandidate(it) } }
 
-        val episodeScoped = if (targetEpisode != null) {
-            document.select(
-                "[data-episode='$targetEpisode'], [data-ep='$targetEpisode'], [data-id='$targetEpisode'], " +
-                    "button:contains($targetEpisode), a:contains($targetEpisode)"
-            )
-        } else emptyList()
+        val document = runCatching {
+            Jsoup.parse(pageTexts.firstOrNull().orEmpty(), playUrl)
+        }.getOrNull()
 
-        val scanElements = (episodeScoped + document.select(
+        document?.select(
             "video source[src], source[src], video[src], iframe[src], embed[src], " +
                 "a[href*='.m3u8'], a[href*='.mp4'], a[href*='embed'], a[href*='player'], " +
                 "[data-url], [data-src], [data-video], [data-file], [data-href]"
-        )).distinct()
-
-        scanElements.forEach { element ->
+        )?.distinct()?.forEach { element ->
             listOf("src", "href", "data-url", "data-src", "data-video", "data-file", "data-href")
                 .map { element.attr(it) }
                 .firstOrNull { it.isNotBlank() }
@@ -349,15 +384,16 @@ class Dracinema : MainAPI() {
             val key = link.substringBefore("?token=").substringBefore("&token=")
             if (!emitted.add(key)) return@forEach
             if (link.contains(".m3u8", true)) {
-                generateM3u8(name, link, pageUrl).forEach {
+                generateM3u8(name, link, playUrl).forEach {
                     callback(it)
                     found = true
                 }
             } else {
                 callback(
                     newExtractorLink(name, name, link, ExtractorLinkType.VIDEO) {
-                        referer = pageUrl
+                        referer = mainUrl
                         quality = getQualityFromName(link).takeIf { it != Qualities.Unknown.value } ?: Qualities.Unknown.value
+                        headers = mapOf("Accept" to "*/*", "Range" to "bytes=0-")
                     }
                 )
                 found = true
@@ -368,36 +404,54 @@ class Dracinema : MainAPI() {
             val key = embed.substringBefore("?")
             if (!emitted.add(key)) return@forEach
             runCatching {
-                if (loadExtractor(embed, pageUrl, subtitleCallback, callback)) found = true
+                if (loadExtractor(embed, playUrl, subtitleCallback, callback)) found = true
             }
         }
 
         return found
     }
 
-    private fun extractMediaUrls(text: String): List<String> {
-        val urls = linkedSetOf<String>()
+    private data class DracinemaVideoSource(val url: String, val quality: Int?)
+
+    private fun String.toPlayUrl(targetEpisode: Int?): String {
+        val clean = substringBefore("?episode=").trimEnd('/')
+        if (clean.contains("/play/", true)) return clean
+        val movieKey = clean.substringAfter("/movie/", "").substringBefore("?").trim('/').takeIf { it.isNotBlank() }
+            ?: return clean
+        val base = "$mainUrl/play/$movieKey"
+        return if (targetEpisode != null && targetEpisode > 1) "$base/$targetEpisode" else base
+    }
+
+    private fun extractDracinemaVideoSources(text: String): List<DracinemaVideoSource> {
         val clean = text.cleanEscaped()
-        val decoded = runCatching { URLDecoder.decode(clean, "UTF-8") }.getOrDefault(clean)
-        val merged = "$clean\n$decoded"
+        val sources = linkedMapOf<String, DracinemaVideoSource>()
 
-        Regex("""https?://[^"'\\\s<>]+?\.(?:m3u8|mp4|webm)(?:\?[^"'\\\s<>]*)?""", RegexOption.IGNORE_CASE)
-            .findAll(merged).map { it.value.cleanEscaped() }.forEach(urls::add)
+        Regex("""["\\]?quality["\\]?\s*:\s*(\d+)[\s\S]{0,80}?["\\]?url["\\]?\s*:\s*["\\](https?://[^"\\]+)""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .forEach { match ->
+                val quality = match.groupValues.getOrNull(1)?.toIntOrNull()
+                val url = match.groupValues.getOrNull(2)?.cleanEscaped()?.takeIf { it.isDracinemaVideoUrl() } ?: return@forEach
+                sources[url] = DracinemaVideoSource(url, quality)
+            }
 
-        Regex("""(?:file|src|source|url|video|playUrl|videoUrl|hls|embedUrl)\s*[:=]\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-            .findAll(merged)
-            .mapNotNull { it.groupValues.getOrNull(1) }
-            .map { it.cleanEscaped() }
-            .filter { it.contains(".m3u8", true) || it.contains(".mp4", true) || it.contains(".webm", true) || it.contains("embed", true) || it.contains("player", true) }
-            .forEach(urls::add)
+        Regex("""https?://awscdn\.netshort\.com/[^"'\\\s<>\]}]+""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .map { it.value.cleanEscaped() }
+            .filter { it.isDracinemaVideoUrl() }
+            .forEach { url -> sources.putIfAbsent(url, DracinemaVideoSource(url, Qualities.P720.value)) }
 
-        Jsoup.parse(merged).select("iframe[src], iframe[data-src], source[src], video[src], a[href]").forEach { element ->
-            element.attr("data-src").ifBlank { element.attr("src") }.ifBlank { element.attr("href") }
-                .takeIf { it.isNotBlank() }
-                ?.let(urls::add)
-        }
+        Regex("""https?://[^"'\\\s<>\]}]+?(?:\.mp4|\.m3u8|\.webm)(?:\?[^"'\\\s<>\]}]*)?""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .map { it.value.cleanEscaped() }
+            .filterNot { it.isNoiseUrl() }
+            .forEach { url -> sources.putIfAbsent(url, DracinemaVideoSource(url, getQualityFromName(url).takeIf { q -> q != Qualities.Unknown.value })) }
 
-        return urls.toList()
+        return sources.values.toList()
+    }
+
+    private fun String.isDracinemaVideoUrl(): Boolean {
+        val lower = lowercase()
+        return lower.contains("awscdn.netshort.com") || lower.contains("mime_type=video_mp4") || lower.contains(".mp4") || lower.contains(".m3u8") || lower.contains(".webm")
     }
 
     private fun Element.getImageAttr(): String? {
@@ -438,7 +492,12 @@ class Dracinema : MainAPI() {
 
     private fun String.cleanEscaped(): String {
         return replace("\\/", "/")
+            .replace("\\u002F", "/")
             .replace("\\u0026", "&")
+            .replace("\\u003d", "=")
+            .replace("\\u003D", "=")
+            .replace("\\u003f", "?")
+            .replace("\\u003F", "?")
             .replace("&amp;", "&")
             .replace("&quot;", "\"")
             .trim()
