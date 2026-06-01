@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.newSubtitleFile
-import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
@@ -47,7 +46,7 @@ class Jeniusplay : ExtractorApi() {
             if (script.data().contains("eval(function(p,a,c,k,e,d)")) {
                 val subData =
                     getAndUnpack(script.data()).substringAfter("\"tracks\":[").substringBefore("],")
-                AppUtils.tryParseJson<List<Tracks>>("[$subData]")?.map { subtitle ->
+                tryParseDrakorJson<List<Tracks>>("[$subData]")?.map { subtitle ->
                     subtitleCallback.invoke(
                         newSubtitleFile(
                             getLanguage(subtitle.label ?: ""),

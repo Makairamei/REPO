@@ -27,7 +27,6 @@ import com.lagradost.cloudstream3.metaproviders.TmdbProvider
 import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTMDbId
 import com.lagradost.cloudstream3.network.CloudflareKiller
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import java.net.URLEncoder
@@ -193,7 +192,7 @@ open class DrakorProvider : TmdbProvider() {
                 }
                 Data(id = id, type = type)
             } else {
-                parseJson<Data>(url)
+                parseDrakorJson<Data>(url)
             }
         } catch (e: Exception) {
             throw ErrorLoadingException("Invalid URL or JSON data: ${e.message}")
@@ -348,7 +347,7 @@ open class DrakorProvider : TmdbProvider() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val res = parseJson<LinkData>(data)
+        val res = parseDrakorJson<LinkData>(data)
         var found = false
         val safeCallback: (ExtractorLink) -> Unit = { link ->
             found = true

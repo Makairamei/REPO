@@ -8,8 +8,6 @@ import com.lagradost.cloudstream3.extractors.helper.AesHelper
 import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.nicehttp.RequestBodyTypes
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -80,7 +78,7 @@ object DrakorProviderExtractor : DrakorProvider() {
                     headers = mapOf("Accept" to "*/*", "X-Requested-With" to "XMLHttpRequest")
                 ).parsedSafe<ResponseHash>() ?: return@amap
 
-                val metrix = parseJson<AesData>(json.embed_url).m
+                val metrix = parseDrakorJson<AesData>(json.embed_url).m
                 val password = createIdlixKey(json.key, metrix)
                 val decrypted = AesHelper.cryptoAESHandler(json.embed_url, password.toByteArray(), false)
                     ?.fixUrlBloat() ?: return@amap
@@ -193,7 +191,7 @@ object DrakorProviderExtractor : DrakorProvider() {
                 ?: return
 
             val jsonResponseText = app.get(signedUrl, referer = targetUrl, headers = DrakorHelper.headers).text
-            val jsonObject = tryParseJson<Map<String, Any>>(jsonResponseText) ?: return
+            val jsonObject = tryParseDrakorJson<Map<String, Any>>(jsonResponseText) ?: return
             val videoSource = jsonObject["video_source"] as? Map<String, String> ?: return
 
             videoSource.forEach { (quality, url) ->
@@ -241,7 +239,7 @@ object DrakorProviderExtractor : DrakorProvider() {
 
         try {
             val searchRes = app.get("$mainUrl/api/DramaList/Search?q=$title&type=0").text
-            val searchList = tryParseJson<ArrayList<KisskhMedia>>(searchRes) ?: return
+            val searchList = tryParseDrakorJson<ArrayList<KisskhMedia>>(searchRes) ?: return
             val matched = searchList.find {
                 it.title.equals(title, true)
             } ?: searchList.firstOrNull { it.title?.contains(title, true) == true } ?: return
@@ -285,7 +283,7 @@ object DrakorProviderExtractor : DrakorProvider() {
 
             val kkeySub = app.get("$KISSKH_SUB_API$epsId&version=2.8.10").parsedSafe<KisskhKey>()?.key ?: ""
             val subJson = app.get("$mainUrl/api/Sub/$epsId?kkey=$kkeySub").text
-            tryParseJson<List<KisskhSubtitle>>(subJson)?.forEach { sub ->
+            tryParseDrakorJson<List<KisskhSubtitle>>(subJson)?.forEach { sub ->
                 subtitleCallback.invoke(
                     newSubtitleFile(
                         sub.label ?: "Unknown",
@@ -325,7 +323,7 @@ object DrakorProviderExtractor : DrakorProvider() {
         ).toJson().toRequestBody(RequestBodyTypes.JSON.toMediaTypeOrNull())
 
         val searchRes = app.post(searchUrl, requestBody = searchBody).text
-        val items = tryParseJson<MovieboxResponse>(searchRes)?.data?.items ?: return
+        val items = tryParseDrakorJson<MovieboxResponse>(searchRes)?.data?.items ?: return
 
         val matchedMedia = items.find { item ->
             val itemYear = item.releaseDate?.split("-")?.firstOrNull()?.toIntOrNull()
@@ -342,7 +340,7 @@ object DrakorProviderExtractor : DrakorProvider() {
         val validReferer = "$apiUrl/spa/videoPlayPage/movies/$detailPath?id=$subjectId&type=/movie/detail&lang=en"
 
         val playRes = app.get(playUrl, referer = validReferer).text
-        val streams = tryParseJson<MovieboxResponse>(playRes)?.data?.streams ?: return
+        val streams = tryParseDrakorJson<MovieboxResponse>(playRes)?.data?.streams ?: return
 
         streams.reversed().distinctBy { it.url }.forEach { source ->
             callback.invoke(
@@ -405,7 +403,7 @@ object DrakorProviderExtractor : DrakorProvider() {
         episodeSelector: String,
     ) {
         fun String.decrypt(key: String): List<GpressSources>? {
-            return tryParseJson<List<GpressSources>>(base64Decode(this).xorDecrypt(key))
+            return tryParseDrakorJson<List<GpressSources>>(base64Decode(this).xorDecrypt(key))
         }
 
         val slug = getEpisodeSlug(season, episode)
@@ -771,7 +769,7 @@ object DrakorProviderExtractor : DrakorProvider() {
             headers = headers
         ).text
         val videoLink =
-            tryParseJson<MappleSources>(res.substringAfter("1:").trim())?.data?.stream_url
+            tryParseDrakorJson<MappleSources>(res.substringAfter("1:").trim())?.data?.stream_url
 
         callback.invoke(
             newExtractorLink(
@@ -792,7 +790,7 @@ object DrakorProviderExtractor : DrakorProvider() {
             "${DrakorProvider.mappleAPI}/api/subtitles?id=$tmdbId&mediaType=$mediaType${if (season == null) "" else "&season=$season&episode=$episode"}",
             referer = "${DrakorProvider.mappleAPI}/"
         ).text
-        tryParseJson<ArrayList<MappleSubtitle>>(subRes)?.map { subtitle ->
+        tryParseDrakorJson<ArrayList<MappleSubtitle>>(subRes)?.map { subtitle ->
             subtitleCallback.invoke(
                 newSubtitleFile(
                     subtitle.display ?: "",
@@ -856,7 +854,7 @@ object DrakorProviderExtractor : DrakorProvider() {
             )
         ).text
 
-        tryParseJson<ArrayList<VidFastServers>>(res)?.filter { it.description?.contains("Original audio") == true }
+        tryParseDrakorJson<ArrayList<VidFastServers>>(res)?.filter { it.description?.contains("Original audio") == true }
             ?.amapIndexed { index, server ->
                 val source =
                     app.get("${DrakorProvider.vidfastAPI}/$module/Sdoi/${server.data}", referer = "${DrakorProvider.vidfastAPI}/")
@@ -898,7 +896,7 @@ object DrakorProviderExtractor : DrakorProvider() {
 
         val res = app.get(url).text
 
-        tryParseJson<ArrayList<WyzieSubtitle>>(res)?.map { subtitle ->
+        tryParseDrakorJson<ArrayList<WyzieSubtitle>>(res)?.map { subtitle ->
             subtitleCallback.invoke(
                 newSubtitleFile(
                     subtitle.display ?: return@map,
@@ -1028,7 +1026,7 @@ object DrakorProviderExtractor : DrakorProvider() {
             ?.map { source ->
                 if (source.key == "source2") {
                     val json = app.get(source.value["url"] ?: return@map, referer = "${DrakorProvider.vidrockAPI}/").text
-                    tryParseJson<ArrayList<VidrockSource>>(json)?.reversed()?.map mirror@{ it ->
+                    tryParseDrakorJson<ArrayList<VidrockSource>>(json)?.reversed()?.map mirror@{ it ->
                         callback.invoke(
                             newExtractorLink(
                                 "Vidrock",
@@ -1063,7 +1061,7 @@ object DrakorProviderExtractor : DrakorProvider() {
 
         val subUrl = "$subAPI/$type/$tmdbId${if (type == "movie") "" else "/$season/$episode"}"
         val res = app.get(subUrl).text
-        tryParseJson<ArrayList<VidrockSubtitle>>(res)?.map { subtitle ->
+        tryParseDrakorJson<ArrayList<VidrockSubtitle>>(res)?.map { subtitle ->
             subtitleCallback.invoke(
                 newSubtitleFile(
                     subtitle.label?.replace(Regex("\\d"), "")?.replace(Regex("\\s+Hi"), "")?.trim()

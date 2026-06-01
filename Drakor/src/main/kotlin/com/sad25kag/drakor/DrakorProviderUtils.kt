@@ -7,7 +7,6 @@ import com.lagradost.cloudstream3.APIHolder.unixTimeMS
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.nicehttp.RequestBodyTypes
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -164,7 +163,7 @@ fun searchIndex(
     response: String,
     isTrimmed: Boolean = true,
 ): List<IndexMedia>? {
-    val files = tryParseJson<IndexSearch>(response)?.data?.files?.filter { media ->
+    val files = tryParseDrakorJson<IndexSearch>(response)?.data?.files?.filter { media ->
         matchingIndex(
             media.name ?: return null,
             media.mimeType ?: return null,
