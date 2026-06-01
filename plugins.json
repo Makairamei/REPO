@@ -559,10 +559,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://drakorid.co&size=%size%",
-        "fileHash": "sha256-8364a52dfe787483761195bd8db3dc753cda549ab321d47045d83b8069f0f330",
+        "fileHash": "sha256-a897936f8c321ab1dbe843e4ea5f1b768bf99467bfb33a1aeb7f4fe47938852f",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 25421,
+        "fileSize": 27753,
         "status": 1,
         "language": "id",
         "authors": [
@@ -573,7 +573,7 @@
             "TvSeries",
             "Movie"
         ],
-        "version": 4,
+        "version": 6,
         "internalName": "DrakoridProvider",
         "description": "Drakor.id - drama Asia subtitle Indonesia.",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/DrakoridProvider.cs3",
