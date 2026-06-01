@@ -720,7 +720,7 @@ class Gerakin21 : MainAPI() {
         val json = runCatching { JSONObject(decrypted) }.getOrNull() ?: return false
         var emitted = false
 
-        fun emitHls(raw: String?, sourceName: String) {
+        suspend fun emitHls(raw: String?, sourceName: String) {
             val fixed = resolveUrl(raw, playerBase) ?: return
             if (!fixed.contains(".m3u8", true)) return
             generateM3u8(
