@@ -216,11 +216,11 @@
         "name": "AnizoneProvider"
     },
     {
-        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://ww1.anoboy.boo&size=%size%",
-        "fileHash": "sha256-104a0057e5be31f99b703b7aae23c6d905d53abb4ceeb30fbdf3e9cb97f015df",
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://anoboy.be&size=%size%",
+        "fileHash": "sha256-ba7a736912cc72e9fa3b1d37c8f086a728307596a9d14d026fe21be37332bd4c",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/sad25kag/BetbetMiro-Extension",
-        "fileSize": 32898,
+        "fileSize": 39513,
         "status": 1,
         "language": "id",
         "authors": [
@@ -231,7 +231,7 @@
             "OVA",
             "Anime"
         ],
-        "version": 17,
+        "version": 18,
         "internalName": "AnoboyProvider",
         "description": "AnoBoy \u2014 Streaming Anime Subtitle Indonesia",
         "url": "https://raw.githubusercontent.com/sad25kag/BetbetMiro-Extension/builds/AnoboyProvider.cs3",
