@@ -326,11 +326,11 @@ class Alqanime : MainAPI() {
             }
 
             if (resolvedUrl.contains("mediafire.com", true)) {
-                if (tryMediafire(resolvedUrl, qualityInt, ::markEmit)) continue
+                if (tryMediafire(resolvedUrl, qualityInt, ::markEmit, data)) continue
             }
 
             if (resolvedUrl.contains("acefile.co", true)) {
-                if (tryAcefile(resolvedUrl, qualityInt, ::markEmit, subtitleCallback)) continue
+                if (tryAcefile(resolvedUrl, qualityInt, ::markEmit, subtitleCallback, data)) continue
             }
 
             val directFromUrl = emitDirect(
@@ -355,7 +355,8 @@ class Alqanime : MainAPI() {
     private suspend fun tryMediafire(
         url: String,
         quality: Int,
-        callback: (ExtractorLink) -> Unit
+        callback: (ExtractorLink) -> Unit,
+        data: String
     ): Boolean {
         val response = runCatching {
             app.get(
@@ -406,7 +407,8 @@ class Alqanime : MainAPI() {
         url: String,
         quality: Int,
         callback: (ExtractorLink) -> Unit,
-        subtitleCallback: (SubtitleFile) -> Unit
+        subtitleCallback: (SubtitleFile) -> Unit,
+        data: String
     ): Boolean {
         val pages = linkedSetOf<String>()
         val pageQueue = mutableListOf<String>()
