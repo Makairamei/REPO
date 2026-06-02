@@ -47,6 +47,8 @@ class SontolFilmProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(pageUrl(request.data, page), referer = "$mainUrl/").document
         val items = document.toSearchResults()
         val hasNext = document.select("link[rel=next], a.next.page-numbers, a.page-numbers[href*='/page/${page + 1}/']").isNotEmpty()
@@ -54,12 +56,14 @@ class SontolFilmProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val document = app.get("$mainUrl/?s=$encoded", referer = "$mainUrl/").document
         return document.toSearchResults()
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fixedUrl = normalizeUrl(url, mainUrl) ?: url
         val document = app.get(fixedUrl, referer = "$mainUrl/").document
 
@@ -124,6 +128,7 @@ class SontolFilmProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val fixedUrl = normalizeUrl(data, mainUrl) ?: data
         val document = app.get(fixedUrl, referer = "$mainUrl/").document
         var handled = false

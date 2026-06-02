@@ -93,6 +93,8 @@ class Perverzija : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(request.data.format(page), interceptor = cfInterceptor, timeout = 15).document
         val home = document.select("div.row div div.post").mapNotNull {
             it.toSearchResult()
@@ -128,6 +130,7 @@ class Perverzija : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         // They added cloudflare in the search page
         val searchResponse = mutableListOf<SearchResponse>()
         val maxPages = if (query.contains(" ")) 6 else 20
@@ -150,6 +153,7 @@ class Perverzija : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, interceptor = cfInterceptor).document
 
         val poster = document.select("div#featured-img-id img").attr("src")
@@ -182,12 +186,14 @@ class Perverzija : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val response = app.get(data)
         val document = response.document
 
         val iframeUrl = document.select("div#player-embed iframe").attr("src")
 
          Xtremestream().getUrl(iframeUrl, null)?.map(callback)
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

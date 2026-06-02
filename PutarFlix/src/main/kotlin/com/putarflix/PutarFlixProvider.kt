@@ -14,6 +14,8 @@ class PutarFlixProvider : MainAPI() {
     override val mainPage = mainPageOf(*PutarFlixSeeds.mainPages.map { it.path to it.name }.toTypedArray())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = PutarFlixUtils.pageUrl(request.data, page)
         val doc = app.get(url, referer = mainUrl).document
         val sections = if (request.data == "/" && page <= 1) {
@@ -26,12 +28,14 @@ class PutarFlixProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         if (query.isBlank()) return emptyList()
         val doc = app.get("$mainUrl/?s=${PutarFlixUtils.encode(query)}", referer = mainUrl).document
         return PutarFlixParser.parseCards(this, doc).distinctBy { it.url }
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val doc = app.get(url, referer = mainUrl).document
         return PutarFlixParser.parseLoad(this, url, doc)
     }
@@ -42,6 +46,7 @@ class PutarFlixProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return PutarFlixExtractor.extract(data, subtitleCallback, callback)
     }
 }

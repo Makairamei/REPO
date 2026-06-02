@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class ArchivebatePlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(Archivebate())
     }
 }

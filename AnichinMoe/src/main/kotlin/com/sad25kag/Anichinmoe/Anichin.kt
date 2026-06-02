@@ -59,6 +59,8 @@ class Anichin : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("${mainUrl}/${request.data}&page=$page").document
         val home = document.select("div.listupd > article").mapNotNull { it.toSearchResult() }
 
@@ -83,6 +85,7 @@ class Anichin : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val searchResponse = mutableListOf<SearchResponse>()
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
 
@@ -98,6 +101,7 @@ class Anichin : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(fixUrl(url)).document
         val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
         var poster = document.select("div.ime > img").attr("src")
@@ -150,6 +154,7 @@ class Anichin : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         // Lightweight license ping to server (non-blocking)
         runCatching { ServerBridge.pingLicense("PLAY") }
         val document = app.get(fixUrl(data)).document

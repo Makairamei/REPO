@@ -50,6 +50,8 @@ class FreeUsePorn : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): com.lagradost.cloudstream3.HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = "${request.data}?page=${page.coerceAtLeast(1)}"
         val document = app.get(url).document
 
@@ -68,6 +70,7 @@ class FreeUsePorn : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val q = URLEncoder.encode(query.trim(), "UTF-8")
         val document = app.get("$mainUrl/search/videos/$q?page=${page.coerceAtLeast(1)}").document
 
@@ -89,6 +92,7 @@ class FreeUsePorn : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst("h1")?.text()?.trim() ?: return null
@@ -129,6 +133,7 @@ class FreeUsePorn : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val videos = document.select("source[src]")
 
@@ -155,6 +160,7 @@ class FreeUsePorn : MainAPI() {
             )
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

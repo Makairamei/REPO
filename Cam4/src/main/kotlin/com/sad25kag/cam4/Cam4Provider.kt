@@ -33,6 +33,8 @@ class Cam4Provider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPagedUrl(request.data, page)
 
         val response = app.get(
@@ -54,6 +56,7 @@ class Cam4Provider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val searchUrl = "$mainUrl/api/directoryCams?directoryJson=true&online=true&url=true&search=$encodedQuery&orderBy=VIDEO_QUALITY&resultsPerPage=60"
 
@@ -69,6 +72,7 @@ class Cam4Provider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val username = extractUsername(url)
             ?: throw ErrorLoadingException("Username tidak ditemukan.")
 
@@ -110,6 +114,7 @@ class Cam4Provider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val username = extractUsername(data) ?: return false
         val streamInfoUrl = "$mainUrl/rest/v1.0/profile/$username/streamInfo"
 
@@ -149,6 +154,7 @@ class Cam4Provider : MainAPI() {
             }
         )
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

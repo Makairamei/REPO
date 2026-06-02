@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class PornHatPlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         // All providers should be added in this manner
         registerMainAPI(PornHat())
     }

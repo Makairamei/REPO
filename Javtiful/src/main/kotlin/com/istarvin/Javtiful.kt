@@ -47,6 +47,8 @@ class Javtiful : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = if (page <= 1) request.data else "${request.data}?page=$page"
         val res = app.get(url).document
         val home = res.select("article.front-video-card").mapNotNull {
@@ -57,6 +59,7 @@ class Javtiful : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url =
             if (page <= 1) "$mainUrl/search?q=$query" else "$mainUrl/search?page=$page&q=$query"
         val res = app.get(url).document
@@ -81,6 +84,7 @@ class Javtiful : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val res = app.get(url).document
         val title = res.selectFirst("div.front-watch-title h1")?.text()?.trim() ?: return null
         val poster = res.selectFirst("meta[property=\"og:image\"]")?.attr("content")
@@ -128,6 +132,7 @@ class Javtiful : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val res = app.get(data).text
         val configRaw = res.substringAfter("id=\"frontWatchConfig\" type=\"application/json\">")
             .substringBefore("</script>")

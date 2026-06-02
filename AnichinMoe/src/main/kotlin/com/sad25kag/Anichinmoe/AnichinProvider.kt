@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class AnichinProvider: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         Anichin.context = context
         registerMainAPI(Anichin())
         registerExtractorAPI(Dailymotion())

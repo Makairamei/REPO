@@ -52,6 +52,8 @@ class Porn00(context: Context) : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("${request.data}/$page").document
         val home     = document.select("div.item").mapNotNull { it.toMainPageResult() }
 
@@ -71,6 +73,7 @@ class Porn00(context: Context) : MainAPI() {
 
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("${mainUrl}/searching/${query}/?from_videos=$page").document
 
         val aramaCevap = document.select("div.item").mapNotNull { it.toSearchResult() }
@@ -108,6 +111,7 @@ class Porn00(context: Context) : MainAPI() {
 }
 
 override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
     val document = app.get(url).document
     val html = document.html()
 
@@ -311,6 +315,7 @@ private fun Element.toRecommendationResult(): SearchResponse? {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 //        Log.d("kraptor_VideCelebs", "data » $data")
         val pageHtml = app.get(data).text
 

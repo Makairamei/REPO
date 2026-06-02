@@ -72,6 +72,8 @@ class Filmapik : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = "$mainUrl/${request.data.format(page)}"
         val document = app.get(url).document
 
@@ -99,6 +101,7 @@ class Filmapik : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val q = URLEncoder.encode(query.trim(), "UTF-8")
 
         val endpoints = listOf(
@@ -128,6 +131,7 @@ class Filmapik : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst(
@@ -272,6 +276,7 @@ class Filmapik : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val links = linkedSetOf<String>()
 

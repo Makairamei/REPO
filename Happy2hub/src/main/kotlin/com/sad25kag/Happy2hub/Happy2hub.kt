@@ -76,6 +76,8 @@ class Happy2hub : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(
             buildPageUrl(request.data, page),
             headers = headers,
@@ -158,7 +160,8 @@ class Happy2hub : MainAPI() {
 
     private fun isBlockedUrl(url: String): Boolean {
         val path = url.substringAfter(mainUrl).trim('/').lowercase()
-        if (path.isBlank()) return true
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val blockedPrefixes = listOf(
             "tag/",
@@ -178,6 +181,7 @@ class Happy2hub : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return emptyList()
 
@@ -221,6 +225,7 @@ class Happy2hub : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = headers, timeout = 30L).document
 
         val title = document.selectFirst("meta[property=og:title]")
@@ -503,6 +508,7 @@ class Happy2hub : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val links = data.split(",")
             .map { it.trim() }
             .filter { it.isNotBlank() }

@@ -68,6 +68,8 @@ open class DutaMovie : MainAPI() {
             )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         // Popup dinonaktifkan agar homepage provider tidak mengganggu navigasi.
         // context?.let { StarPopupHelper.showStarPopupIfNeeded(it) }
         val data = request.data.format(page)
@@ -108,6 +110,7 @@ open class DutaMovie : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return emptyList()
 
@@ -147,6 +150,7 @@ open class DutaMovie : MainAPI() {
 
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
     // Pakai Desktop User-Agent agar website tidak mengirim halaman mobile
     val desktopHeaders = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -286,6 +290,7 @@ open class DutaMovie : MainAPI() {
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
     val baseUrl = getBaseUrl(data)
     directUrl = baseUrl
 

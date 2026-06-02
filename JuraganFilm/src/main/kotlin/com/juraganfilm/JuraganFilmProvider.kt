@@ -80,6 +80,8 @@ class JuraganFilmProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPageUrl(request.data, page)
         val document = app.get(url, headers = headers, referer = mainUrl, timeout = 20000L).document
         val items = parseCards(document).distinctBy { canonicalUrl(it.url) }
@@ -87,6 +89,7 @@ class JuraganFilmProvider : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return newSearchResponseList(emptyList(), hasNext = false)
 
@@ -121,6 +124,7 @@ class JuraganFilmProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query, 1).items
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fixedUrl = fixUrl(url, mainUrl) ?: url
         val document = app.get(fixedUrl, headers = headers, referer = mainUrl, timeout = 20000L).document
 
@@ -173,6 +177,7 @@ class JuraganFilmProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val parsed = runCatching { AppUtils.parseJson<LoadData>(data) }.getOrNull()
             ?: LoadData(url = data, title = null, poster = null, episode = null)
 
@@ -205,7 +210,8 @@ class JuraganFilmProvider : MainAPI() {
                     )
                 }
             )
-            return true
+            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         }
 
         suspend fun tryExtractor(link: String, referer: String): Boolean {
@@ -266,7 +272,8 @@ class JuraganFilmProvider : MainAPI() {
                 tryExtractor(candidate, startUrl) -> found = true
             }
         }
-        if (found) return true
+        if (found) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         candidates
             .filter { !isDirectMedia(it) && !isBadUrl(it) }

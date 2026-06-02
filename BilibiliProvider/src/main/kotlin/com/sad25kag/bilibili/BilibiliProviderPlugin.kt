@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class BilibiliProviderPlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         BilibiliProvider.context = context
         registerMainAPI(BilibiliProvider())
     }

@@ -74,6 +74,8 @@ class SamehadakuProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val category = SamehadakuSeeds.mainPage.firstOrNull { it.name == request.name }
         val pageUrl = buildPageUrl(request.data, page)
         val mode = category?.mode ?: SamehadakuCategoryMode.Listing
@@ -107,6 +109,7 @@ class SamehadakuProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val results = linkedMapOf<String, SearchResponse>()
         for (page in 1..5) {
             val path = if (page <= 1) "$mainUrl/?s=${encode(query)}" else "$mainUrl/page/$page/?s=${encode(query)}"
@@ -119,6 +122,7 @@ class SamehadakuProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val firstResponse = safeGet(url) ?: return null
         val entryUrl = if (url.contains("/anime/", true)) {
             url
@@ -152,6 +156,7 @@ class SamehadakuProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return SamehadakuExtractor.loadLinks(
             data = data,
             mainUrl = mainUrl,

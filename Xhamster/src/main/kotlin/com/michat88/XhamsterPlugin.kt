@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class XhamsterPlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         // Mendaftarkan kelas Xhamster agar dibaca oleh CloudStream
         registerMainAPI(Xhamster())
     }

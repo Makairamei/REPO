@@ -57,6 +57,8 @@ class Oppadrama : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = "$mainUrl/${request.data}".plus("&page=$page")
         val document = app.get(url, referer = "$mainUrl/", headers = requestHeaders).document
         val items = document.select(searchResultSelector)
@@ -89,6 +91,7 @@ class Oppadrama : MainAPI() {
 }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
     val document = app.get("$mainUrl/?s=$query", referer = "$mainUrl/", headers = requestHeaders, timeout = 50L).document
     val results = document.select(searchResultSelector)
         .mapNotNull { it.toSearchResult() }
@@ -105,6 +108,7 @@ class Oppadrama : MainAPI() {
     }
 }
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
     val document = app.get(url, referer = "$mainUrl/", headers = requestHeaders).document
 
     
@@ -210,6 +214,7 @@ val episodes = episodeElements
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data, referer = "$mainUrl/", headers = requestHeaders).document
 
         document.selectFirst("div.player-embed iframe")
@@ -247,6 +252,7 @@ val episodes = episodeElements
             }
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

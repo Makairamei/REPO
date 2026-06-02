@@ -30,6 +30,8 @@ class NoodleMagazineProvider : MainAPI() { // all providers must be an instance 
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val curpage = page - 1
         val link = "$mainUrl/video/${request.data}?p=$curpage"
         val document = app.get(link).document
@@ -48,6 +50,7 @@ class NoodleMagazineProvider : MainAPI() { // all providers must be an instance 
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("$mainUrl/video/$query?p=$page").document
         val results = document.select("div.item").mapNotNull { it.toSearchResult() }
         val hasNext = if(results.isEmpty()) false else true
@@ -56,6 +59,7 @@ class NoodleMagazineProvider : MainAPI() { // all providers must be an instance 
 
   @Suppress("DEPRECATION")
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val title = document.selectFirst("div.l_info h1")?.text()?.trim() ?: "null"
         val poster = document.selectFirst("""meta[property="og:image"]""")?.attr("content") ?: "null"
@@ -74,6 +78,7 @@ class NoodleMagazineProvider : MainAPI() { // all providers must be an instance 
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val script = document.selectFirst("script:containsData(playlist)")
 
@@ -101,6 +106,7 @@ class NoodleMagazineProvider : MainAPI() { // all providers must be an instance 
             }
             extlinkList.forEach(callback)
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

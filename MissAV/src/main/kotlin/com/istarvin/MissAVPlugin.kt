@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class MissAVPlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(MissAV())
     }
 }

@@ -38,6 +38,8 @@ class YouTubeProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         if (page > 1) return newHomePageResponse(emptyList(), false)
 
         val category = YouTubeSeeds.findCategory(request.name, request.data)
@@ -85,10 +87,12 @@ class YouTubeProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         return getSearchVideos(query)
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val videoInfo = runCatching { StreamInfo.getInfo(service, url) }.getOrNull() ?: return null
         val title = videoInfo.name.takeIf { it.isNotBlank() } ?: return null
         val runtime = durationMinutes(videoInfo.duration)
@@ -124,6 +128,7 @@ class YouTubeProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return YouTubeExtractor.loadLinks(data, subtitleCallback, callback)
     }
 }

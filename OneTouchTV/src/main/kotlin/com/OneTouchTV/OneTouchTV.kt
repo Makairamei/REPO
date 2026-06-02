@@ -48,6 +48,7 @@ class OneTouchTV : MainAPI() {
     )
 
     override suspend fun search(query: String,page: Int): SearchResponseList? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url = "$mainUrl/vod/search?page=$page&keyword=$query"
         val responseText = try {
             app.get(url, referer = "$mainUrl/").text
@@ -92,6 +93,8 @@ class OneTouchTV : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val rawResponse = try {
             app.get("$mainUrl/${request.data}").text
         } catch (e: Exception) {
@@ -220,6 +223,7 @@ class OneTouchTV : MainAPI() {
 
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val rawResponse = try {
             app.get(url).text
         } catch (e: Exception) {
@@ -337,6 +341,7 @@ class OneTouchTV : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val rawResponse = try {
             app.get(data).text
         } catch (e: Exception) {

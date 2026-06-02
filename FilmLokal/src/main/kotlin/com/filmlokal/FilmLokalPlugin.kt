@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class FilmLokalPlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(FilmLokalProvider())
     }
 }

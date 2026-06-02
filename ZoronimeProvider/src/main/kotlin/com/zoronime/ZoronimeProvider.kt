@@ -30,6 +30,8 @@ class ZoronimeProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPageUrl(request.data, page)
         val document = app.get(url, referer = "$mainUrl/").document
         val items = document.select("a[href^=/anime/], a[href^=$mainUrl/anime/]")
@@ -40,6 +42,7 @@ class ZoronimeProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val document = app.get("$mainUrl/search?q=$encoded", referer = "$mainUrl/").document
         return document.select("a[href^=/anime/], a[href^=$mainUrl/anime/]")
@@ -48,6 +51,7 @@ class ZoronimeProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val response = app.get(fixUrl(url), referer = "$mainUrl/")
         val document = response.document
         val html = response.text
@@ -128,6 +132,7 @@ class ZoronimeProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val response = app.get(data, referer = "$mainUrl/")
         val html = response.text
         val emitted = linkedSetOf<String>()
@@ -192,7 +197,8 @@ class ZoronimeProvider : MainAPI() {
                 )
             }
 
-            return true
+            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         }
 
         suspend fun inspectIframe(iframeUrl: String, label: String = "$name Direct") {

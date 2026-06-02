@@ -50,6 +50,8 @@ class Ngefilm21Provider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val homeItems = coroutineScope {
             categories.map { (title, urlPath) ->
                 async {
@@ -84,11 +86,13 @@ class Ngefilm21Provider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         return app.get("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv").document
             .select("article.item-infinite").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val title = document.selectFirst("h1.entry-title")?.text()?.trim() ?: ""
         val poster = document.selectFirst(".gmr-movie-data figure img")?.getImageAttr()
@@ -134,6 +138,7 @@ class Ngefilm21Provider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val playerLinks = document.select(".muvipro-player-tabs a").mapNotNull { it.attr("href") }.toMutableList()
         if (playerLinks.isEmpty()) playerLinks.add(data)
@@ -177,6 +182,7 @@ class Ngefilm21Provider : MainAPI() {
                 }
             }.awaitAll()
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

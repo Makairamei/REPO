@@ -30,6 +30,8 @@ class Animexin : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val link = if (request.data.contains("genres")) {
             "$mainUrl/${request.data}page/$page"
         } else {
@@ -98,6 +100,7 @@ class Animexin : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val results = linkedSetOf<SearchResponse>()
         val queryTokens = query.split(Regex("\\s+"))
@@ -142,6 +145,7 @@ class Animexin : MainAPI() {
 
     @Suppress("SuspiciousIndentation")
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).documentLarge
         val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
         val poster = document.select("div.thumb img").attr("src").ifEmpty {
@@ -194,6 +198,7 @@ class Animexin : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).documentLarge
         val servers = document.select(".mobius option, #mobius option, select option")
         val candidates = linkedSetOf<String>()

@@ -58,7 +58,9 @@ class FitNakedGirls : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest) =
-        app.get(fixUrl(request.data.format(page))).document.let { document ->
+        app.get(fixUrl(request.data.format(page))).document.let {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME") document ->
             val home = document.select(
                 "li.g1-collection-item, " +
                     "article, " +
@@ -79,6 +81,7 @@ class FitNakedGirls : MainAPI() {
         }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val q = URLEncoder.encode(query.trim(), "UTF-8")
         val searchUrl = if (page <= 1) {
             "$mainUrl/videos/?s=$q"
@@ -107,6 +110,7 @@ class FitNakedGirls : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst(
@@ -226,6 +230,7 @@ class FitNakedGirls : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
 
         val directVideos = linkedSetOf<String>()

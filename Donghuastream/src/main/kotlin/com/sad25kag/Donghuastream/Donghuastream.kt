@@ -60,6 +60,8 @@ open class Donghuastream : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPagedUrl(request.data, page)
         val document = app.get(
             url,
@@ -106,6 +108,7 @@ open class Donghuastream : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         if (query.isBlank()) return emptyList()
 
         val searchResponse = mutableListOf<SearchResponse>()
@@ -149,6 +152,7 @@ open class Donghuastream : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = defaultHeaders,
@@ -283,6 +287,7 @@ open class Donghuastream : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val response = app.get(data, headers = defaultHeaders, referer = "$mainUrl/")
         val document = response.document
         val emitted = linkedSetOf<String>()

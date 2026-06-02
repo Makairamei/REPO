@@ -73,6 +73,8 @@ class HentaiWorld : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPageUrl(request.data, page)
 
         val document = app.get(
@@ -158,7 +160,8 @@ class HentaiWorld : MainAPI() {
     private fun isBlockedUrl(url: String): Boolean {
         val path = url.substringAfter("hentaiworld.tv").trim('/').lowercase()
 
-        if (path.isBlank()) return true
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val blocked = listOf(
             "hentai-videos/tag/",
@@ -180,6 +183,7 @@ class HentaiWorld : MainAPI() {
         query: String,
         page: Int
     ): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
 
         if (keyword.isBlank()) {
@@ -222,6 +226,7 @@ class HentaiWorld : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = headers,
@@ -376,6 +381,7 @@ class HentaiWorld : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val response = app.get(
             data,
             headers = headers,

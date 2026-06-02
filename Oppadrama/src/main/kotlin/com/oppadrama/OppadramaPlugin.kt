@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class OppadramaPlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         Oppadrama.context = context
         registerMainAPI(Oppadrama())
         registerExtractorAPI(Smoothpre())

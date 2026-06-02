@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class PasarBokepPlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(PasarBokepProvider())
 
         // Pasarbokep error page mentions StreamSB playback; keep the common aliases local

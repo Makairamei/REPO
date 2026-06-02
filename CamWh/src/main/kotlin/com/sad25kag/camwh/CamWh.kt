@@ -79,6 +79,8 @@ class CamWh : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(
             buildPagedUrl(request.data, page),
             headers = defaultHeaders,
@@ -96,6 +98,7 @@ class CamWh : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         return search(query, 1).items
     }
 
@@ -119,6 +122,7 @@ class CamWh : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = defaultHeaders,
@@ -178,6 +182,7 @@ class CamWh : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val emitted = linkedSetOf<String>()
 
         suspend fun emitDirect(rawUrl: String?, label: String = name) {
@@ -249,7 +254,8 @@ class CamWh : MainAPI() {
             }
         }
 
-        if (emitted.isNotEmpty()) return true
+        if (emitted.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val webview = WebViewResolver(
             interceptUrl = Regex(""".*/get_file/.*"""),

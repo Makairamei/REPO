@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class MovieBoxProviderPlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         MovieBoxProvider.context = context
         // All providers should be added in this manner. Please don't edit the providers list directly.        
         registerMainAPI(MovieBoxProvider())

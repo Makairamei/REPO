@@ -47,6 +47,8 @@ class WinbuProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val path = if (page == 1) {
             request.data.replace("/page/%d/", "/").replace("page/%d/", "")
         } else {
@@ -109,6 +111,7 @@ class WinbuProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         return app.get("$mainUrl/?s=$query").documentLarge
             .select("#movies .ml-item, .movies-list .ml-item")
             .mapNotNull { it.toSearchResult("Series") }
@@ -124,6 +127,7 @@ class WinbuProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).documentLarge
         val infoRoot = document.selectFirst(".m-info .t-item") ?: document
 
@@ -259,6 +263,7 @@ class WinbuProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).documentLarge
         var found = false
         val seen = Collections.synchronizedSet(hashSetOf<String>())
@@ -446,7 +451,8 @@ suspend fun fetchTmdbLogoUrl(
 
     fun voted(o: JSONObject) = o.optDouble("vote_average", 0.0) > 0 && o.optInt("vote_count", 0) > 0
     fun better(a: JSONObject?, b: JSONObject): Boolean {
-        if (a == null) return true
+        if (a == null) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         val aAvg = a.optDouble("vote_average", 0.0)
         val aCnt = a.optInt("vote_count", 0)
         val bAvg = b.optDouble("vote_average", 0.0)

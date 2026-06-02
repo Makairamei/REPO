@@ -67,7 +67,9 @@ class FreePornVideos : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest) =
-        app.get(fixUrl(request.data.format(page.coerceAtLeast(1)))).document.let { document ->
+        app.get(fixUrl(request.data.format(page.coerceAtLeast(1)))).document.let {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME") document ->
             val home = document.select(
                 "#list_videos_common_videos_list_items > div.item, " +
                     "#custom_list_videos_videos_list_search_result_items > div.item, " +
@@ -88,6 +90,7 @@ class FreePornVideos : MainAPI() {
         }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val searchResponse = linkedMapOf<String, SearchResponse>()
         val searchQuery = query.createSlug().orEmpty()
             .ifBlank { URLEncoder.encode(query.trim(), "UTF-8") }
@@ -112,6 +115,7 @@ class FreePornVideos : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val fullTitle = document.selectFirst(
@@ -227,6 +231,7 @@ class FreePornVideos : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val links = linkedSetOf<Pair<String, String>>()
 

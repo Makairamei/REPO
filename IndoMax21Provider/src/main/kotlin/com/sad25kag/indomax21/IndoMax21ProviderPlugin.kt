@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class IndoMax21ProviderPlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(IndoMax21Provider())
     }
 }

@@ -49,6 +49,8 @@ class Porntrex : MainAPI() {
             page: Int,
             request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         var url: String
         url = if (page == 1) {
             "$mainUrl/${request.data}/"
@@ -86,6 +88,7 @@ class Porntrex : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url: String = if (page == 1) {
             "$mainUrl/search/${query.replace(" ", "-")}/"
         } else {
@@ -102,6 +105,7 @@ class Porntrex : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val jsonObject = JSONObject(document.selectXpath("//script[contains(text(),'var flashvars')]").first()?.data()
@@ -136,6 +140,7 @@ class Porntrex : MainAPI() {
             subtitleCallback: (SubtitleFile) -> Unit,
             callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
 
         val jsonObject = JSONObject(document.selectXpath("//script[contains(text(),'var flashvars')]").first()?.data()
@@ -174,6 +179,7 @@ class Porntrex : MainAPI() {
             )
         }
         extlinkList.forEach(callback)
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

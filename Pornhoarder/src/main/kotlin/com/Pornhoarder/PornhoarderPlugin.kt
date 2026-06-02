@@ -47,6 +47,8 @@ class PornhoarderPlugin : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         if(request.data == "Latest" || request.data == "Popular")
         {
             val body = getRequestBody("",request.data == "Latest",page)
@@ -73,6 +75,7 @@ class PornhoarderPlugin : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
 
         val searchResponse = mutableListOf<SearchResponse>()
 
@@ -97,6 +100,7 @@ class PornhoarderPlugin : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst("meta[property=og:title]")?.attr("content")?.trim().toString().replace("| PornHoarder.tv","")
@@ -111,6 +115,7 @@ class PornhoarderPlugin : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val doc = app.get(data).document
         val serversList = mutableListOf<String>()
         val currentSrc = doc.select(".video-player iframe").attr("src")
@@ -134,6 +139,7 @@ class PornhoarderPlugin : MainAPI() {
             val videoHosterUrl = doc1.select("iframe").attr("src")
             loadExtractor(videoHosterUrl,subtitleCallback,callback)
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

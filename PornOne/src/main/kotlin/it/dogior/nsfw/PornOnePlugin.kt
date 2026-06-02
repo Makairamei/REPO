@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.extractors.StreamTape
 @CloudstreamPlugin
 class PornOnePlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(PornOneProvider())
     }
 }

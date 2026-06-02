@@ -37,6 +37,8 @@ class EPorner : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         // Pembuatan URL dinamis yang rapi untuk menangani halaman pertama vs halaman berikutnya
         val url = if (request.data.isEmpty()) {
             if (page == 1) "$mainUrl/" else "$mainUrl/$page/"
@@ -95,12 +97,14 @@ class EPorner : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url = "$mainUrl/search/${query.replace(" ", "-")}/"
         val document = app.get(url).document
         return document.select("#div-search-results div.mb, div#vidresults div.mb").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val title = document.selectFirst("h1, meta[property=og:title]")?.text() 
             ?: document.selectFirst("meta[property=og:title]")?.attr("content") ?: ""
@@ -122,6 +126,7 @@ class EPorner : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         var videoFound = false
         val url = data
         val resolver = WebViewResolver(

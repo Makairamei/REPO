@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class DutaMoviePlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         DutaMovie.context = context
         registerMainAPI(DutaMovie())
         registerExtractorAPI(Dingtezuni())

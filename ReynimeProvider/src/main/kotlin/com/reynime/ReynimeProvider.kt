@@ -80,6 +80,8 @@ class ReynimeProvider : MainAPI() {
     private fun episodeDetailApi(episodeId: String): String = "$mainUrl/backend/api/episodes.php?id=$episodeId&_t=${System.currentTimeMillis()}"
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val safePage = page.coerceAtLeast(1)
         val webItems = fetchOfficialRows(request.data, safePage)
         val seedItems = filterSeeds(request.data)
@@ -95,6 +97,7 @@ class ReynimeProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return emptyList()
 
@@ -113,6 +116,7 @@ class ReynimeProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val requestedId = extractSeriesId(url)
         val requestedSlug = extractSeriesSlug(url)
         val seed = ReynimeSeeds.byId(requestedId) ?: ReynimeSeeds.bySlug(requestedSlug)
@@ -144,6 +148,7 @@ class ReynimeProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return ReynimeExtractor.loadLinks(
             data = data,
             mainUrl = mainUrl,

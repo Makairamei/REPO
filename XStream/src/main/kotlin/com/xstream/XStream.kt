@@ -36,6 +36,8 @@ open class XStream : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = "https://api.themoviedb.org/3/${request.data}&api_key=$tmdbApiKey&language=en-US&page=$page"
         val response = app.get(url).parsedSafe<TmdbResponse>() ?: return newHomePageResponse(emptyList())
 
@@ -63,6 +65,7 @@ open class XStream : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url = "https://api.themoviedb.org/3/search/multi?api_key=$tmdbApiKey&query=${query.replace(" ", "%20")}&language=en-US"
         val response = app.get(url).parsedSafe<TmdbResponse>() ?: return emptyList()
         
@@ -88,6 +91,7 @@ open class XStream : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val isTvSeries = url.contains("/tv/")
         if (isTvSeries) {
             val tmdbId = url.substringAfter("/tv/").substringBefore("/")
@@ -177,6 +181,7 @@ open class XStream : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val isTvSeries = data.contains("/tv/")
         val parts = data.split("/")
         
@@ -204,6 +209,7 @@ open class XStream : MainAPI() {
             { if (title.isNotEmpty()) invokeAdimoviebox(title, year, season, episode, subtitleCallback, callback) },
             { if (title.isNotEmpty()) invokeAdimoviebox2(title, year, season, episode, subtitleCallback, callback) }
         )
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

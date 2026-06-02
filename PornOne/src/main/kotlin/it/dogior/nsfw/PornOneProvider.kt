@@ -47,6 +47,8 @@ class PornOneProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("$mainUrl${request.data}$page", timeout = 30).document
         val responseList = document.select(".popbop.vidLinkFX").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(
@@ -72,6 +74,7 @@ class PornOneProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
 
         val searchResponse = mutableListOf<SearchResponse>()
 
@@ -96,6 +99,7 @@ class PornOneProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val script = document.select("script[data-react-helmet=\"true\"]").html()
         val jsonObj = JSONObject(script)
@@ -116,6 +120,7 @@ class PornOneProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val doc = app.get(data).document
         val sources = doc.select("#pornone-video-player source")
         sources.forEach { item ->
@@ -129,6 +134,7 @@ class PornOneProvider : MainAPI() {
 
 
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

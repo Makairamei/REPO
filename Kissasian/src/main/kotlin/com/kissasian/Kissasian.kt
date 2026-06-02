@@ -47,6 +47,8 @@ class Kissasian : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = "$mainUrl/${request.data}".plus("&page=$page")
         val document = app.get(url).document
         val items = document.select("div.listupd article.bs")
@@ -76,6 +78,7 @@ class Kissasian : MainAPI() {
 }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
     val document = app.get("$mainUrl/?s=$query", timeout = 50L).document
     val results = document.select("div.listupd article.bs")
         .mapNotNull { it.toSearchResult() }
@@ -91,6 +94,7 @@ class Kissasian : MainAPI() {
     }
 }
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
     val document = app.get(url).document
 
     // Judul
@@ -197,6 +201,7 @@ val episodes = episodeElements
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
     val document = app.get(data).document
 
@@ -238,7 +243,8 @@ val episodes = episodeElements
         }
     }
 
-    return true
+    LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 }
 
 

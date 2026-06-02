@@ -134,6 +134,8 @@ class BondageValley : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPagedUrl(request.data, page)
         val document = app.get(url, headers = defaultHeaders, referer = "$mainUrl/").document
 
@@ -155,6 +157,7 @@ class BondageValley : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         if (query.isBlank()) return emptyList()
 
         val url = "$mainUrl/search/${query.urlEncoded()}"
@@ -180,6 +183,7 @@ class BondageValley : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = defaultHeaders, referer = "$mainUrl/").document
 
         val title = document.selectFirst("h1")?.text()?.trim()
@@ -235,6 +239,7 @@ class BondageValley : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         if (data.isBlank()) return false
 
         val emitted = linkedSetOf<String>()
@@ -302,7 +307,8 @@ class BondageValley : MainAPI() {
             }
         }
 
-        if (emitted.isNotEmpty()) return true
+        if (emitted.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         return runCatching {
             loadExtractor(data, "$mainUrl/", subtitleCallback, callback)

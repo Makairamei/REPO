@@ -103,6 +103,8 @@ class Midasxxi : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val base = request.data.trimEnd('/')
         val target = if (page <= 1) "$base/" else "$base/page/$page/"
         val req = app.get(target)
@@ -181,6 +183,7 @@ class Midasxxi : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val urls = listOf(
             "$mainUrl/search/$encoded/page/$page/",
@@ -235,6 +238,7 @@ class Midasxxi : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val request = app.get(url)
         directUrl = getBaseUrl(request.url)
         val document = request.document
@@ -354,6 +358,7 @@ class Midasxxi : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
         val pageResp = app.get(data)
         val pageUrl = pageResp.url

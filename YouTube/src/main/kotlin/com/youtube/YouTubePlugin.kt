@@ -10,6 +10,7 @@ import org.schabi.newpipe.extractor.localization.Localization
 @CloudstreamPlugin
 class YouTubePlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         NewPipe.setupLocalization(Localization("id"), ContentCountry("ID"))
         registerMainAPI(YouTubeProvider())
     }

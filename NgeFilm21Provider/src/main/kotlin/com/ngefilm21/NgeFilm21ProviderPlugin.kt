@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class Ngefilm21ProviderPlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(Ngefilm21Provider())
     }
 }

@@ -62,6 +62,8 @@ class PodjavProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse? {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val items = mutableListOf<HomePageList>()
         
         // Handle URL untuk pagination (halaman 1, 2, dst)
@@ -102,6 +104,7 @@ class PodjavProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         // Menerjemahkan teks pencarian agar spasi aman di URL
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val url = "$mainUrl/?s=$encodedQuery"
@@ -112,6 +115,7 @@ class PodjavProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val titleText = document.selectFirst("h1.video-info-title")?.text() ?: return null
@@ -162,6 +166,7 @@ class PodjavProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
 
         // Cari elemen video utama
@@ -218,7 +223,8 @@ class PodjavProvider : MainAPI() {
 
         // Jika kita sudah menemukan direct link (seperti MP4), HENTIKAN proses.
         // Kita tidak perlu susah-susah mencari dan membongkar iframe lagi.
-        if (foundDirectLink) return true
+        if (foundDirectLink) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
 
         // ==========================================
@@ -280,6 +286,7 @@ class PodjavProvider : MainAPI() {
             }
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

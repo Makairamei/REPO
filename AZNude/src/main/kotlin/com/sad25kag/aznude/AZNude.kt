@@ -76,6 +76,8 @@ class AZNude : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPagedTagUrl(request.data, page)
         val document = app.get(url, headers = browserHeaders).document
         val home = document.select("div.media-list div.media-list-item, div.media-list-item.video-list-item")
@@ -104,6 +106,7 @@ class AZNude : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         if (query.isBlank()) return emptyList()
         return try {
             val mapper = jacksonObjectMapper().registerKotlinModule()
@@ -167,6 +170,7 @@ class AZNude : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = browserHeaders).document
 
         if (url.contains("/view/celeb/", true) || url.contains("/view/movie/", true)) {
@@ -255,6 +259,7 @@ class AZNude : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         Log.d("kraptor_$name", "data = $data")
         val document = app.get(data, headers = browserHeaders).document
         val emitted = linkedSetOf<String>()

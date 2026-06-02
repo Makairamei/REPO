@@ -91,7 +91,8 @@ class AnizoneProvider : MainAPI() {
     )
 
     private suspend fun initializeLiveWire(): Boolean {
-        if (!wireData["wireSnapshot"].isNullOrBlank()) return true
+        if (!wireData["wireSnapshot"].isNullOrBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         try {
             val initReq = app.get("$mainUrl/anime")
@@ -110,7 +111,8 @@ class AnizoneProvider : MainAPI() {
             wireData["wireSnapshot"] = snapshot
 
             sortAnimeLatest()
-            return true
+            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         } catch (e: Exception) {
             Log.e("AniZone Init", "Error initializeLiveWire: ${e.message}")
             return false
@@ -212,6 +214,8 @@ class AnizoneProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         if (request.data.startsWith("tag/")) {
             return getTagMainPage(page, request)
         }
@@ -327,6 +331,7 @@ class AnizoneProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         initializeLiveWire()
 
         val doc = getHtmlFromWire(
@@ -343,6 +348,7 @@ class AnizoneProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val r = Jsoup.connect(url)
             .method(Connection.Method.GET)
             .execute()
@@ -467,6 +473,7 @@ class AnizoneProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val parts = data.split("|||")
         val episodeUrl = parts[0]
 
@@ -514,6 +521,7 @@ class AnizoneProvider : MainAPI() {
             }
         )
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

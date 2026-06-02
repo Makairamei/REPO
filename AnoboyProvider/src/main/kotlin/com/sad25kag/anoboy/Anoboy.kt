@@ -74,6 +74,8 @@ class Anoboy : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val pageUrl = buildPageUrl(request.data, page)
         val document = app.get(pageUrl, headers = defaultHeaders()).document
 
@@ -92,6 +94,7 @@ class Anoboy : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val queryWords = query.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
 
@@ -145,6 +148,7 @@ class Anoboy : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fixedUrl = normalizeAnoboyUrl(url)
         val document = app.get(fixedUrl, headers = defaultHeaders()).document
 
@@ -220,6 +224,7 @@ class Anoboy : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val (embeddedReferer, requestData) = decodeEpisodeData(data)
         val referer = embeddedReferer ?: mainUrl
         val emittedKeys = linkedSetOf<String>()
@@ -460,6 +465,7 @@ class Anoboy : MainAPI() {
             )
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 
@@ -601,6 +607,7 @@ class Anoboy : MainAPI() {
             }
         )
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 
@@ -694,7 +701,8 @@ class Anoboy : MainAPI() {
         val lower = url.lowercase()
 
         if (isBadUrl(url)) return false
-        if (isDirectMedia(url)) return true
+        if (isDirectMedia(url)) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         return lower.contains("blogger.com/video.g") ||
             lower.contains("playerwish.com") ||

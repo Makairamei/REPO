@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin // Đánh dấu đây là plugin
 class XnxxPlugin: Plugin() { // Kế thừa Plugin
     override fun load(context: Context) {
+        LicenseClient.init(context)
         // Tất cả provider nên được thêm vào theo cách này.
         // Đăng ký AnimeHayProvider
         registerMainAPI(XnxxProvider()) // Gọi đăng ký provider ở đây

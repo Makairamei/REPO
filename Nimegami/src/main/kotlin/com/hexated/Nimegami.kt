@@ -52,6 +52,8 @@ class Nimegami : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("$mainUrl${request.data}/page/$page").document
         val home = document.select("div.post-article article, div.archive article").mapNotNull {
             it.toSearchResult()
@@ -80,6 +82,7 @@ class Nimegami : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val searchResponse = mutableListOf<SearchResponse>()
         for (i in 1..2) {
             val res =
@@ -93,6 +96,7 @@ class Nimegami : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val table = document.select("div#Info table tbody")
@@ -151,6 +155,7 @@ class Nimegami : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
         tryParseJson<ArrayList<Sources>>(base64Decode(data))?.map { sources ->
             sources.url?.amap { url ->
@@ -164,6 +169,7 @@ class Nimegami : MainAPI() {
             }
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

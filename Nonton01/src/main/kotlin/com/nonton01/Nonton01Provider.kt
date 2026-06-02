@@ -28,6 +28,8 @@ class Nonton01Provider : MainAPI() {
     override val mainPage = mainPageOf(*Nonton01Seeds.mainPageRows())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val results = firstNonEmptyPageResult(pageUrls(mainUrl, request.data, page))
         return if (results.isNotEmpty()) {
             newHomePageResponse(listOf(HomePageList(request.name, results)))
@@ -37,6 +39,7 @@ class Nonton01Provider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val candidates = Nonton01Seeds.MIRROR_URLS.map { searchUrl(it, query) }
         return firstNonEmptyPageResult(candidates)
     }
@@ -44,6 +47,7 @@ class Nonton01Provider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         for (candidate in mirrorUrlsFor(url)) {
             val response = runCatching {
                 val origin = Nonton01Utils.originOf(candidate) ?: mainUrl
@@ -73,6 +77,7 @@ class Nonton01Provider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return Nonton01Extractor.loadLinks(name, mainUrl, data, subtitleCallback, callback)
     }
 }

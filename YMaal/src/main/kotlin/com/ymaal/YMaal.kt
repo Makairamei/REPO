@@ -40,6 +40,8 @@ class YMaal : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = if (page == 1) "$mainUrl/${request.data}/" else "$mainUrl/${request.data}/page/$page/"
         val document = app.get(url).document
         val home = document.select("a.video-card").mapNotNull { toResult(it) }
@@ -47,12 +49,14 @@ class YMaal : MainAPI() {
     }
 
     override suspend fun search(query: String,page:Int): SearchResponseList? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("$mainUrl/page/$page/?s=$query").document
         val searchResult:List<SearchResponse> = document.select("a.video-card").mapNotNull { toResult(it) }
         return searchResult.toNewSearchResponseList()
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val doc = app.get(url).document
         var title = doc.selectFirst("h1.video-title")?.text() ?: "$name"
         var description = doc.select("div.description").text().removePrefix("Description")
@@ -71,10 +75,12 @@ class YMaal : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         if (data.isEmpty()) return false
         callback.invoke(
             newExtractorLink("$name","$name",data)
         )
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

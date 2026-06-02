@@ -71,6 +71,8 @@ class KazefuriProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = if (page == 1) request.data.replace("/page/%d/", "/").replace("page/%d/", "")
             .replace("%d", page.toString()) else request.data.format(page)
         val document = app.get(url, referer = "$mainUrl/").document
@@ -83,6 +85,7 @@ class KazefuriProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val document = app.get("$mainUrl/?s=$encoded", referer = "$mainUrl/").document
         return document.select("div.listupd article.bs, div.listupd div.bs, article.bs")
@@ -91,6 +94,7 @@ class KazefuriProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fixedUrl = fixUrl(url)
         val document = app.get(fixedUrl, referer = "$mainUrl/").document
 
@@ -164,6 +168,7 @@ class KazefuriProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data, referer = "$mainUrl/").document
         val emitted = linkedSetOf<String>()
         val candidates = linkedSetOf<Pair<String, String>>()

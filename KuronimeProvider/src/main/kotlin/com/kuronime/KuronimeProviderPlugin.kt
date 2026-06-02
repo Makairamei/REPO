@@ -8,6 +8,7 @@ import android.content.Context
 @CloudstreamPlugin
 class KuronimeProviderPlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(KuronimeProvider())
         registerExtractorAPI(PixelDrain())
         registerExtractorAPI(Gofile())

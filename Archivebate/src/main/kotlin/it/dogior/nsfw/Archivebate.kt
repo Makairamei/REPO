@@ -88,6 +88,8 @@ class Archivebate : MainAPI() {
 
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val action = if (request.name == "Latest Videos") "loadVideos" else "load_platform_videos"
         val data = setup("${request.data}?page=$page", action)
 
@@ -136,6 +138,7 @@ class Archivebate : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val h = mapOf(
             "Refer" to headers["Refer"]!!,
             "X-Requested-With" to "XMLHttpRequest",
@@ -158,6 +161,7 @@ class Archivebate : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         if (url.contains("/profile/")) {
             return getModelProfile(url)
         } else {
@@ -239,9 +243,11 @@ class Archivebate : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 //        Log.d("Archivebate", data)
         MixDropAg().getUrl(data, referer = null, subtitleCallback, callback)
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

@@ -99,6 +99,8 @@ class OtakudesuProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(request.data.toPagedUrl(page)).document
         val home = document.select(
             "div.venz > ul > li, ul.chivsrc > li, div.page ul.chivsrc > li, div.col-anime, article, div.detpost"
@@ -149,6 +151,7 @@ class OtakudesuProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
     val url = "$mainUrl/?s=$query&post_type=anime"
     val document = app.get(url).document
 
@@ -166,6 +169,7 @@ class OtakudesuProvider : MainAPI() {
 
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst("div.infozingle > p:nth-child(1) > span")?.ownText()
@@ -239,6 +243,7 @@ class OtakudesuProvider : MainAPI() {
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
     val document = app.get(data).document
 
@@ -303,7 +308,8 @@ class OtakudesuProvider : MainAPI() {
         }
     }
 
-    return true
+    LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 }
 
 

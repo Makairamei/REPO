@@ -190,6 +190,8 @@ class MovieBoxProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val mapper = jacksonObjectMapper()
 
         fun toSearchResponses(items: JsonNode): List<SearchResponse> {
@@ -284,6 +286,7 @@ class MovieBoxProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url = "$apiUrl/wefeed-h5api-bff/subject/search"
         val jsonBody =
             """{"keyword":"${query.replace("\"", "\\\"")}","page":1,"perPage":24,"subjectType":0}"""
@@ -314,6 +317,7 @@ class MovieBoxProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val parsed = Uri.parse(url)
 
         val detailPath = parsed.getQueryParameter("detailPath")
@@ -443,6 +447,7 @@ class MovieBoxProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return try {
             val subjectId: String
             val detailPath: String

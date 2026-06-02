@@ -51,6 +51,8 @@ class OploverzProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val home = app.get("$backAPI/api/episodes?page=$page&pageSize=24&sort=${request.data}")
             .parsedSafe<Anime>()?.data?.map {
                 it.toSearchResult()
@@ -77,6 +79,7 @@ class OploverzProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         return app.get("$backAPI/api/series?q=$query")
             .parsedSafe<SearchAnime>()?.data?.map {
                 newAnimeSearchResponse(
@@ -97,6 +100,7 @@ class OploverzProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).body.string().let { Jsoup.parse(it) }
 
         val title = document.selectFirst("p.text-2xl.font-semibold")?.text() ?: ""
@@ -144,6 +148,7 @@ class OploverzProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
         val doc = app.get(data).document
 
@@ -155,6 +160,7 @@ class OploverzProvider : MainAPI() {
             }
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

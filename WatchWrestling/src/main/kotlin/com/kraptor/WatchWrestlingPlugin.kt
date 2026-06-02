@@ -8,6 +8,7 @@ import android.content.Context
 @CloudstreamPlugin
 class WatchWrestlingPlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(WatchWrestling())
         registerExtractorAPI(ReklamSiker())
     }

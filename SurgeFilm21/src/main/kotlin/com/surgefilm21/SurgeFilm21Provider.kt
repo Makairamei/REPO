@@ -36,6 +36,8 @@ class SurgeFilm21Provider : MainAPI() {
     override val mainPage = mainPageOf(*sections.map { it.data to it.name }.toTypedArray())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val section = sections.firstOrNull { it.data == request.data }
         val defaultType = typeFromSection(section?.name ?: request.name)
 
@@ -57,6 +59,7 @@ class SurgeFilm21Provider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         if (query.isBlank()) return emptyList()
         val results = mutableListOf<SearchResponse>()
         for (page in 1..3) {
@@ -89,6 +92,7 @@ class SurgeFilm21Provider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = SurgeFilm21Sepeda.getDocument(url, mainUrl)
         val title = SurgeFilm21Parser.parseTitle(document).ifBlank { return null }
         val poster = SurgeFilm21Parser.parsePoster(document, url)
@@ -116,6 +120,7 @@ class SurgeFilm21Provider : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (com.lagradost.cloudstream3.utils.ExtractorLink) -> Unit): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return SurgeFilm21Extractor.load(data, subtitleCallback, callback)
     }
 

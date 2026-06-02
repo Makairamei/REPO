@@ -95,6 +95,8 @@ class DailymotionProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val category = parseCategoryData(request.data)
         val videos = fetchVideoPage(category.apiQuery, page, 36)
         val rawList = videos?.list.orEmpty()
@@ -115,6 +117,7 @@ class DailymotionProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) return emptyList()
 
@@ -134,6 +137,7 @@ class DailymotionProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val videoId = url.extractDailymotionId()
             ?: throw ErrorLoadingException("ID video Dailymotion tidak ditemukan")
 
@@ -153,6 +157,7 @@ class DailymotionProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         if (data.isBlank()) return false
 
         val urls = data.split(LINK_SEPARATOR)

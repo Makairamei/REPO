@@ -50,6 +50,8 @@ class PrimeVideoMirrorProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         // Show star popup on first visit (shared across all CNCVerse plugins)
         context?.let { StarPopupHelper.showStarPopupIfNeeded(it) }
         
@@ -91,6 +93,7 @@ class PrimeVideoMirrorProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         cookie_value = if(cookie_value.isEmpty()) bypass(mainUrl) else cookie_value
         val cookies = mapOf(
             "t_hash_t" to cookie_value,
@@ -109,6 +112,7 @@ class PrimeVideoMirrorProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         cookie_value = if(cookie_value.isEmpty()) bypass(mainUrl) else cookie_value
         val id = parseJson<Id>(url).id
         val cookies = mapOf(
@@ -225,6 +229,7 @@ class PrimeVideoMirrorProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val apiBase = resolveApiUrl()
         val id = parseJson<LoadData>(data).id
         val response = app.get(
@@ -240,6 +245,7 @@ class PrimeVideoMirrorProvider : MainAPI() {
             }
         )
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

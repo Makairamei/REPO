@@ -63,6 +63,8 @@ class Javx : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPageUrl(request.data, page)
         val document = app.get(url, headers = headers, timeout = 25L).document
 
@@ -155,7 +157,8 @@ class Javx : MainAPI() {
 
     private fun isBlockedUrl(url: String): Boolean {
         val path = url.substringAfter(mainUrl).trim('/').lowercase()
-        if (path.isBlank()) return true
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val blocked = listOf(
             "category/",
@@ -193,6 +196,7 @@ class Javx : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return newSearchResponseList(emptyList(), hasNext = false)
 
@@ -221,6 +225,7 @@ class Javx : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = headers, timeout = 25L).document
 
         val title = listOf(
@@ -265,6 +270,7 @@ class Javx : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data, headers = headers, referer = mainUrl, timeout = 25L).document
         var found = false
 

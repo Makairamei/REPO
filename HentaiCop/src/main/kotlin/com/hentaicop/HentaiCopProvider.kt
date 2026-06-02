@@ -25,6 +25,8 @@ class HentaiCopProvider : MainAPI() {
     override val mainPage = mainPageOf(*HentaiCopSeeds.mainPageRows())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = pageUrl(mainUrl, request.data, page)
         val document = app.get(url, headers = HentaiCopUtils.headers, referer = mainUrl).document
         val items = HentaiCopParser.parseListing(this, document)
@@ -34,11 +36,13 @@ class HentaiCopProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get(searchUrl(mainUrl, query), headers = HentaiCopUtils.headers, referer = mainUrl).document
         return HentaiCopParser.parseListing(this, document)
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = HentaiCopUtils.headers, referer = mainUrl).document
         return HentaiCopParser.parseLoadResponse(this, url, document)
     }
@@ -49,6 +53,7 @@ class HentaiCopProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return HentaiCopExtractor.loadLinks(name, mainUrl, data, subtitleCallback, callback)
     }
 }

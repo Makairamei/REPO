@@ -39,6 +39,8 @@ class IndoMax21Provider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = if (page == 1) request.data else "${request.data}page/$page/"
         val document = app.get(url).document
         
@@ -77,6 +79,7 @@ class IndoMax21Provider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val searchUrl = "$mainUrl/?s=$query"
         val document = app.get(searchUrl).document
         
@@ -113,6 +116,7 @@ class IndoMax21Provider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val title = document.selectFirst("h1.entry-title")?.text() ?: return null
         val poster = document.selectFirst("meta[property=og:image]")?.attr("content")
@@ -180,6 +184,7 @@ class IndoMax21Provider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
 
         val rawServerUrls = document.select(".muvipro-player-tabs a")
@@ -225,6 +230,7 @@ class IndoMax21Provider : MainAPI() {
                 }
             }
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

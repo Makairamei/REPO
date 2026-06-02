@@ -112,6 +112,8 @@ class IdlixProvider : MainAPI() {
         page: Int,
         request: MainPageRequest,
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = if (request.data.contains("%d")) {
             request.data.format(page.coerceAtLeast(1))
         } else {
@@ -149,6 +151,7 @@ class IdlixProvider : MainAPI() {
         query: String,
         page: Int,
     ): SearchResponseList? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return emptyList<SearchResponse>().toNewSearchResponseList()
 
@@ -165,6 +168,7 @@ class IdlixProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val data = app.get(url, headers = apiHeaders, referer = mainUrl, timeout = 10000L)
             .parsedSafe<DetailResponse>()
             ?: throw ErrorLoadingException("Invalid IDLIX API response")
@@ -319,6 +323,7 @@ class IdlixProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val parsed = runCatching { parseJson<LoadData>(data) }.getOrNull() ?: return false
         if (parsed.id.isBlank() || parsed.type.isBlank()) return false
 

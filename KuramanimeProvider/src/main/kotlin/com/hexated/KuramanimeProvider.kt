@@ -58,6 +58,8 @@ class KuramanimeProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(request.data + page).document
         val home = document.select("div#animeList div.product__item").mapNotNull {
             it.toSearchResult()
@@ -90,6 +92,7 @@ class KuramanimeProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         return app.get(
             "$mainUrl/anime?search=$query&order_by=latest"
         ).document.select("div#animeList div.product__item").mapNotNull {
@@ -98,6 +101,7 @@ class KuramanimeProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst(".anime__details__title > h3")!!.text().trim()
@@ -212,6 +216,7 @@ class KuramanimeProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
         val req = app.get(data)
         val res = req.document
@@ -266,6 +271,7 @@ class KuramanimeProvider : MainAPI() {
         }
 
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

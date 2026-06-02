@@ -96,6 +96,8 @@ class JAVHDProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = getPageDocument(request.data, page)
         val responseList = parseCards(document)
             .distinctBy { it.url }
@@ -254,6 +256,7 @@ class JAVHDProvider : MainAPI() {
         query: String,
         page: Int
     ): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) {
             return newSearchResponseList(emptyList(), hasNext = false)
@@ -286,6 +289,7 @@ class JAVHDProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = headers,
@@ -329,6 +333,7 @@ class JAVHDProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val pageUrl = fixLocalUrl(data) ?: data
         val response = app.get(
             pageUrl,

@@ -93,6 +93,8 @@ class Xhamster : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         // Logika paginasi ini sudah mendukung struktur /kategori/nama-kategori/2 untuk xHamster
         val pageUrl = if (page == 1) request.data else "${request.data.removeSuffix("/")}/$page"
         val html = app.get(pageUrl, headers = headers).text
@@ -106,6 +108,7 @@ class Xhamster : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val html = app.get("$mainUrl/search/$query?page=$page", headers = headers).text
         val searchItems = extractVideos(html)
         
@@ -121,6 +124,7 @@ class Xhamster : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val html = app.get(url, headers = headers).text
         val document = Jsoup.parse(html)
 
@@ -151,6 +155,7 @@ class Xhamster : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val html = app.get(data, headers = headers).text
         val document = Jsoup.parse(html)
 
@@ -196,6 +201,7 @@ class Xhamster : MainAPI() {
             )
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

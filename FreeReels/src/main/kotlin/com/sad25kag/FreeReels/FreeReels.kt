@@ -310,6 +310,8 @@ class FreeReels : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         ensureSession()
 
         val category = nativeCategories.find { it.key == request.data }
@@ -329,6 +331,7 @@ class FreeReels : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         ensureSession()
 
         val nextToken = if (page <= 1) {
@@ -372,6 +375,7 @@ class FreeReels : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         ensureSession()
 
         val seriesId = url.substringAfterLast("/").substringBefore("?").trim()
@@ -442,6 +446,7 @@ class FreeReels : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val ep = tryParseFreeReelsJson<NativeEpisode>(data) ?: return false
 
         val videoUrl = ep.externalAudioH264

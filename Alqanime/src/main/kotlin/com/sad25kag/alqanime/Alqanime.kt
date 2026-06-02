@@ -88,6 +88,8 @@ class Alqanime : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(request.data.format(page), headers = commonHeaders).document
         val selector = "div.listupd:not(.popularslider) article.bs"
         val home = document.select(selector).mapNotNull { it.toSearchResult() }
@@ -113,11 +115,13 @@ class Alqanime : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("$mainUrl/?s=$query", headers = commonHeaders).document
         return document.select("article.bs").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = commonHeaders).document
 
         val rawTitle = document.selectFirst("h1.entry-title")?.text()?.trim() ?: return null
@@ -270,6 +274,7 @@ class Alqanime : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val links = parseEpisodeLinks(data)
         if (links.isEmpty()) return false
 
@@ -302,7 +307,8 @@ class Alqanime : MainAPI() {
                 this.quality = quality
                 this.headers = headers
             })
-            return true
+            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         }
 
         for (linkData in links) {
@@ -389,7 +395,8 @@ class Alqanime : MainAPI() {
                 this.quality = quality
                 this.headers = commonHeaders + mapOf("Referer" to url)
             })
-            return true
+            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         }
 
         return false
@@ -454,7 +461,8 @@ class Alqanime : MainAPI() {
                 emitted = true
             }
 
-            if (emitted) return true
+            if (emitted) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
             runCatching {
                 loadExtractor(pageUrl, "$mainUrl/", subtitleCallback) { link ->

@@ -128,6 +128,8 @@ class LayarKacaProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val pageUrl = buildPagedUrl(request.data, page)
 
         val document = app.get(
@@ -266,7 +268,8 @@ class LayarKacaProvider : MainAPI() {
         val value = url.lowercase()
         val path = runCatching { URI(url).path.trim('/') }.getOrDefault(value)
 
-        if (path.isBlank()) return true
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         return listOf(
             "genre/",
@@ -292,6 +295,7 @@ class LayarKacaProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         return search(query, 1).items
     }
 
@@ -389,6 +393,7 @@ class LayarKacaProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = headers,
@@ -540,6 +545,7 @@ class LayarKacaProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val pageUrl = normalizeUrl(data, mainUrl)
         val response = app.get(
             pageUrl,
@@ -608,7 +614,8 @@ class LayarKacaProvider : MainAPI() {
                 found = true
             }
 
-        if (found) return true
+        if (found) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         embedLinks
             .filterNot { isJunkLink(it) }

@@ -80,6 +80,8 @@ class Dracinema : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPageUrl(request.data, page)
         val document = app.get(url, headers = commonHeaders, referer = mainUrl).document
 
@@ -175,6 +177,7 @@ class Dracinema : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return newSearchResponseList(emptyList(), hasNext = false)
 
@@ -219,6 +222,7 @@ class Dracinema : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = commonHeaders, referer = mainUrl).document
         val title = document.selectFirst("h1, h1[class*=title], meta[property=og:title], meta[name=title]")
             ?.let { if (it.hasAttr("content")) it.attr("content") else it.text() }
@@ -303,6 +307,7 @@ class Dracinema : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val targetEpisode = data.substringAfter("?episode=", "").substringBefore("&").toIntOrNull()
         val playUrl = data.toPlayUrl(targetEpisode)
         val emitted = linkedSetOf<String>()
@@ -350,7 +355,8 @@ class Dracinema : MainAPI() {
                 }
             }
 
-        if (found) return true
+        if (found) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val directLinks = linkedSetOf<String>()
         val embedLinks = linkedSetOf<String>()

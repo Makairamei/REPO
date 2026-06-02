@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class NekopoiPlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         // Resmi sebagai milik BetbetMiro
         registerMainAPI(Nekopoi())
         registerExtractorAPI(ZippyShare())

@@ -113,6 +113,8 @@ class Pornslash : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = if (page <= 1) request.data else "${request.data}?p=$page"
         val document = app.get(url).document
         val home = document.select("div.video-item").mapNotNull { it.toSearchResult() }
@@ -131,6 +133,7 @@ class Pornslash : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url = if (page <= 1) "${mainUrl}/search/$query" else "${mainUrl}/search/$query?p=$page"
         val document = app.get(url).document
         val results = document.select("div.video-item").mapNotNull { it.toSearchResult() }
@@ -141,6 +144,7 @@ class Pornslash : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst("h1.video-page-title")?.text()?.trim() ?: return null
@@ -157,6 +161,7 @@ class Pornslash : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val embedUrl = document.selectFirst("script[type=\"application/ld+json\"]")?.data()?.let { json ->
             Regex("\"embedUrl\":\\s*\"(.*?)\"").find(json)?.groupValues?.get(1)
@@ -192,6 +197,7 @@ class Pornslash : MainAPI() {
                 }
             )
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

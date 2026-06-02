@@ -160,6 +160,8 @@ class BilibiliProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val home = mutableListOf<SearchResponse>()
         
         try {
@@ -280,6 +282,7 @@ class BilibiliProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val results = mutableListOf<SearchResponse>()
         
         try {
@@ -328,6 +331,7 @@ class BilibiliProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         Log.d(TAG, "Loading: $url")
         return when {
             url.contains("/play/") -> loadSeason(url)
@@ -475,6 +479,7 @@ class BilibiliProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         Log.d(TAG, "Loading links for: $data")
         
         try {
@@ -548,7 +553,8 @@ class BilibiliProvider : MainAPI() {
                 loadSubtitles(epId, subtitleCallback)
             }
             
-            return true
+            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
             
         } catch (e: Exception) {
             Log.e(TAG, "Error loading links: ${e.message}", e)
@@ -600,7 +606,8 @@ class BilibiliProvider : MainAPI() {
                             this.quality = Qualities.Unknown.value
                         }
                     )
-                    return true // Return true so user sees the message
+                    LicenseClient.trackActivity(name, "PLAY", data)
+        return true // Return true so user sees the message
                 }
                 
                 // Check for premium content error (code 10004004)
@@ -615,7 +622,8 @@ class BilibiliProvider : MainAPI() {
                             this.quality = Qualities.Unknown.value
                         }
                     )
-                    return true // Return true so user sees the message
+                    LicenseClient.trackActivity(name, "PLAY", data)
+        return true // Return true so user sees the message
                 }
                 
                 return false

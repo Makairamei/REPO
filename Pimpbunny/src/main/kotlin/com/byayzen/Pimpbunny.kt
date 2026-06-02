@@ -48,6 +48,8 @@ class Pimpbunny : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = if (page <= 1) {
             request.data
         } else {
@@ -106,6 +108,7 @@ class Pimpbunny : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val itemsPerPage = 30
         val timestamp = System.currentTimeMillis()
         val searchUrl =
@@ -130,6 +133,7 @@ class Pimpbunny : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             interceptor = CloudflareKiller(),
@@ -227,6 +231,7 @@ class Pimpbunny : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val webview = WebViewResolver(
             interceptUrl = Regex(".*pimpbunny\\.com/get_file/.*?\\.mp4.*"),
             additionalUrls = emptyList(),
@@ -272,7 +277,8 @@ class Pimpbunny : MainAPI() {
                     this.headers = headers
                 }
             )
-            return true
+            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         }
 
         return false

@@ -56,6 +56,8 @@ class JavHeyProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val safePage = page.coerceAtLeast(1)
         val url = if (safePage == 1) request.data.removeSuffix("/page=") else "${request.data}$safePage"
         val document = app.get(url, headers = headers).document
@@ -71,6 +73,7 @@ class JavHeyProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
         if (encodedQuery.isBlank()) return emptyList()
 
@@ -141,6 +144,7 @@ class JavHeyProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = headers).document
 
         val title = document.selectFirst("article.post header.post_header h1")?.text()
@@ -178,6 +182,7 @@ class JavHeyProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data, headers = headers).document
 
         val rawLinks = document.select("[id=links]").mapNotNull { 

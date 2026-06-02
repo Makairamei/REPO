@@ -89,6 +89,8 @@ class Filmkita : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = fixUrl(request.data.format(page))
         val document = app.get(url).document
 
@@ -113,6 +115,7 @@ class Filmkita : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val q = URLEncoder.encode(query.trim(), "UTF-8")
 
         val endpoints = listOf(
@@ -143,6 +146,7 @@ class Filmkita : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val response = app.get(url)
         val document = response.document
 
@@ -269,6 +273,7 @@ class Filmkita : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val baseUrl = getBaseUrl(data)
         val document = app.get(data).document
         val links = linkedSetOf<String>()

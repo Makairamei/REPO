@@ -25,6 +25,8 @@ class JavFCProvider : MainAPI() {
     override val mainPage = mainPageOf(*JavFCSeeds.mainPagePairs())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = pageUrl(mainUrl, request.data, page)
         val document = app.get(url, headers = JavFCUtils.headers).document
         val results = JavFCParser.parseListing(this, document)
@@ -32,6 +34,7 @@ class JavFCProvider : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val offset = ((page - 1) * 24).coerceAtLeast(0)
         val url = "$mainUrl/search?per_page=$offset&q=${query.urlEncoded()}"
         val document = app.get(url, headers = JavFCUtils.headers).document
@@ -40,6 +43,7 @@ class JavFCProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = JavFCUtils.headers).document
         return JavFCParser.parseLoadResponse(this, url, document)
     }
@@ -50,6 +54,7 @@ class JavFCProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return JavFCExtractor.loadLinks(name, mainUrl, data, subtitleCallback, callback)
     }
 }

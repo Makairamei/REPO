@@ -26,6 +26,8 @@ class internetchicks : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("$mainUrl/${request.data}/page/$page/").document
         val home     = document.select("article").mapNotNull { it.toSearchResult() }
 
@@ -50,6 +52,7 @@ class internetchicks : MainAPI() {
     }
 
     override suspend fun search(query: String, page : Int): SearchResponseList? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("${mainUrl}/page/$page/?s=$query&id=5036").document
         val results = document.select("article").mapNotNull { it.toSearchResult() }
         val hasNext = if(results.isEmpty()) false else true
@@ -57,6 +60,7 @@ class internetchicks : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title       = document.selectFirst("meta[property=og:title]")?.attr("content")?.trim().toString()
@@ -71,6 +75,7 @@ class internetchicks : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         //val sources = mutableListOf<String>()
         document.select("article > div > div > button").forEach { button ->
@@ -84,6 +89,7 @@ class internetchicks : MainAPI() {
                 loadExtractor(it, subtitleCallback, callback)
             }
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

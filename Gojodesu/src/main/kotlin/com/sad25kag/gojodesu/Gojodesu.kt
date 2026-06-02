@@ -99,6 +99,8 @@ class Gojodesu : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val documents = if (request.data.contains("type=ova", true)) {
             val fallbackTypes = listOf("ova", "special", "ona", "bd")
             fallbackTypes.mapNotNull { type ->
@@ -118,6 +120,7 @@ class Gojodesu : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val endpoints = listOf(
             "$mainUrl/?s=$encoded",
@@ -138,6 +141,7 @@ class Gojodesu : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fixedUrl = normalizeUrl(url, mainUrl) ?: url
         val document = app.get(fixedUrl, referer = "$mainUrl/", headers = commonHeaders).document
 
@@ -194,6 +198,7 @@ class Gojodesu : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val fixedUrl = normalizeUrl(data, mainUrl) ?: data
         val document = app.get(fixedUrl, referer = "$mainUrl/", headers = commonHeaders).document
         val candidates = linkedSetOf<String>()

@@ -62,6 +62,8 @@ class DrakoridProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(
             buildPageUrl(request.data, page),
             headers = baseHeaders,
@@ -79,6 +81,7 @@ class DrakoridProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val clean = query.trim()
         if (clean.isBlank()) return emptyList()
         val encoded = URLEncoder.encode(clean, "UTF-8")
@@ -94,6 +97,7 @@ class DrakoridProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = baseHeaders,
@@ -178,6 +182,7 @@ class DrakoridProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val pageUrl = resolveEpisodeData(data) ?: return false
         val document = app.get(
             pageUrl,
@@ -337,7 +342,8 @@ class DrakoridProvider : MainAPI() {
 
             if (!mediaUrl.isNullOrBlank()) {
                 emitDirect(mediaUrl, iframeSrc, callback)
-                return true
+                LicenseClient.trackActivity(name, "PLAY", data)
+        return true
             }
         }
 

@@ -51,6 +51,8 @@ class Pusatfilm : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = request.data.format(page)
         val doc = app.get(url).document
         val home = doc.select("article, .post, .item, .ml-item, .movie-item")
@@ -64,6 +66,7 @@ class Pusatfilm : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
         val urls = listOf(
             "$mainUrl/?s=$encodedQuery",
@@ -85,6 +88,7 @@ class Pusatfilm : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val doc = app.get(url).document
 
         val title = doc.selectFirst("h1.entry-title, h1, .single-title, .post-title")
@@ -135,6 +139,7 @@ class Pusatfilm : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val pageHtml = document.outerHtml()
         val collected = linkedSetOf<String>()

@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.extractors.StreamTape
 @CloudstreamPlugin
 class MangopornProvider: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(Mangoporn())
         registerExtractorAPI(EmturbovidExtractor())
         registerExtractorAPI(FileMoonSx())

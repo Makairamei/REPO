@@ -66,6 +66,8 @@ class Azmovies : MainAPI() {
         )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         // Jangan pakai String.format() di URL karena genre seperti Science%20Fiction
         // akan dibaca sebagai formatter conversion dan bikin error: Conversion = 'F'.
         val pageUrl = request.data.replace("%d", page.toString())
@@ -77,12 +79,14 @@ class Azmovies : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url =
             "$mainUrl/search?q=${query.urlEncode()}&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured"
         return request(url).document.select("#movies-container a.poster").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = request(url).document
 
         val title = document.selectFirst("h1.movie-title")?.text()?.trim().orEmpty()
@@ -127,6 +131,7 @@ class Azmovies : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val response = request(data)
         val document = response.document
         val seenSubtitles = linkedSetOf<String>()
@@ -204,6 +209,7 @@ class Azmovies : MainAPI() {
                 }
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 
@@ -277,6 +283,7 @@ class Azmovies : MainAPI() {
 
         if (generatedLinks.isEmpty()) return false
         generatedLinks.forEach(callback)
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

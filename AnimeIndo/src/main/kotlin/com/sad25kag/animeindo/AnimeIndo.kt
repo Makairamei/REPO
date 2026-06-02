@@ -70,6 +70,8 @@ class AnimeIndo : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val isMovie = request.data.contains("/movie/", true)
         val document = app.get(buildPageUrl(request.data, page)).document
 
@@ -252,6 +254,7 @@ class AnimeIndo : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encodedQuery = URLEncoder.encode(query, "UTF-8").replace("+", "-")
         val document = app.get("$mainUrl/search/$encodedQuery/").document
         val results = mutableListOf<AnimeIndoItem>()
@@ -270,6 +273,7 @@ class AnimeIndo : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val initialDocument = app.get(url).document
         val episodePage = isEpisodeUrl(url)
         val animeUrl = if (url.contains("/anime/", true)) {
@@ -420,6 +424,7 @@ class AnimeIndo : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val serverUrls = mutableListOf<String>()
 

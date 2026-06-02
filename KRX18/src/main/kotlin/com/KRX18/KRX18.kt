@@ -66,6 +66,8 @@ class KRX18 : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("$mainUrl/${request.data}/?page/$page").document
         val home = document.select("#archive-content article,div.items.normal article")
             .map { it.toSearchResult() }
@@ -89,12 +91,14 @@ class KRX18 : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("$mainUrl/search/videos?search_query=$query").document
         val searchResponse = document.select("div.card.border-0").map { it.toSearchResult() }
         return searchResponse
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val title = document.selectFirst("div.data h1")?.text() ?: "Unknown"
         val poster =
@@ -117,6 +121,7 @@ class KRX18 : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val req = app.get(data).document
         req.select("ul#playeroptionsul li").map {
             Triple(
@@ -141,6 +146,7 @@ class KRX18 : MainAPI() {
                 Log.d("Phisher source",source)
             }
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

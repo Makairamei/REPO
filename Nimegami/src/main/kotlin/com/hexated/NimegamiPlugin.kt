@@ -8,6 +8,7 @@ import android.content.Context
 @CloudstreamPlugin
 class NimegamiPlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         // All providers should be added in this manner. Please don't edit the providers list directly.
         registerMainAPI(Nimegami())
         registerExtractorAPI(Mitedrive())

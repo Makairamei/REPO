@@ -61,6 +61,8 @@ class Animasu : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
 
         val document =
             app.get("$mainUrl/pencarian/?${request.data}&halaman=$page").document
@@ -126,6 +128,7 @@ class Animasu : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
 
         return app.get("$mainUrl/?s=$query")
             .document
@@ -136,6 +139,7 @@ class Animasu : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
 
         val document = app.get(url).document
 
@@ -252,6 +256,7 @@ class Animasu : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
         val document = app.get(data).document
         val candidates = linkedSetOf<Pair<String, String?>>()
@@ -332,6 +337,7 @@ class Animasu : MainAPI() {
             )
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

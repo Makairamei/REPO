@@ -36,6 +36,8 @@ class PencurimovieProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("$mainUrl/${request.data}/page/$page", timeout = 50L).document
         val home = document.select("div.ml-item").mapNotNull { it.toSearchResult() }
 
@@ -62,12 +64,14 @@ class PencurimovieProvider : MainAPI() {
 
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
             val document = app.get("${mainUrl}?s=$query", timeout = 50L).document
             val results =document.select("div.ml-item").mapNotNull { it.toSearchResult() }
         return results
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, timeout = 50L).document
         val title =
             document.selectFirst("div.mvic-desc h3")?.text()?.trim().toString().substringBefore("(")
@@ -145,11 +149,13 @@ class PencurimovieProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         document.select("div.movieplay iframe").forEach {
             val href = it.attr("data-src")
             loadExtractor(href,subtitleCallback, callback)
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

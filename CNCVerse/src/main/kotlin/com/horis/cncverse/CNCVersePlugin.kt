@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 open class CNCVersePlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         NetflixMirrorStorage.init(context.applicationContext)
         DisneyStudioProvider.context = context
         NetflixMirrorProvider.context = context

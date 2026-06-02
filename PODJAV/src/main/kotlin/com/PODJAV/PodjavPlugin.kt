@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class PodjavPlugin : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         // Fungsi ini digunakan untuk mendaftarkan provider kita ke dalam sistem Cloudstream
         // Nama class harus sesuai dengan yang ada di PodjavProvider.kt
         registerMainAPI(PodjavProvider())

@@ -11,6 +11,7 @@ class ExtractorPlugin : Plugin() {
     }
 
     override fun load(context: Context) {
+        LicenseClient.init(context)
         val sharedPref = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
 
         registerExtractorAPI(LuluVid())

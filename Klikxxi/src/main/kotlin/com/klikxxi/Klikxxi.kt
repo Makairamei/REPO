@@ -37,6 +37,8 @@ class Klikxxi : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
     val url = if (page == 1) {
         // Hapus "page/%d/" dan biarkan jadi "tv/"
         "$mainUrl/${request.data.replace("page/%d/", "")}"
@@ -119,6 +121,7 @@ class Klikxxi : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("$mainUrl/?s=$query", timeout = 50L).document
         return document.select("article.item").mapNotNull { it.toSearchResult() }
     }
@@ -138,6 +141,7 @@ class Klikxxi : MainAPI() {
        ======================= */
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fetch = app.get(url)
         val document = fetch.document
 
@@ -272,6 +276,7 @@ class Klikxxi : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val postId = document
             .selectFirst("div#muvipro_player_content_id")
@@ -298,6 +303,7 @@ class Klikxxi : MainAPI() {
             loadExtractor(link, mainUrl, subtitleCallback, callback)
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

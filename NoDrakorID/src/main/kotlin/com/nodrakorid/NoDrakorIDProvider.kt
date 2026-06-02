@@ -16,6 +16,8 @@ class NoDrakorIDProvider : MainAPI() {
     override val mainPage = mainPageOf(*NoDrakorIDSepeda.mainPages.map { it.path to it.name }.toTypedArray())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = NoDrakorIDUtils.pageUrl(request.data, page)
         val doc = app.get(url, referer = mainUrl, headers = NoDrakorIDUtils.browserHeaders).document
         val cards = if (request.data == "/" && page <= 1) {
@@ -27,6 +29,7 @@ class NoDrakorIDProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         if (query.isBlank()) return emptyList()
         val encoded = NoDrakorIDUtils.encode(query)
         val searchUrls = listOf(
@@ -44,6 +47,7 @@ class NoDrakorIDProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val clean = NoDrakorIDUtils.absoluteUrl(mainUrl, url) ?: url
         val doc = app.get(clean, referer = mainUrl, headers = NoDrakorIDUtils.browserHeaders).document
         return NoDrakorIDParser.parseLoad(this, clean, doc)
@@ -55,6 +59,7 @@ class NoDrakorIDProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return NoDrakorIDExtractor.extract(data, subtitleCallback, callback)
     }
 }

@@ -20,6 +20,8 @@ class YunshanID : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val response = app.get("$mainUrl/api/donghuas").text
         val allDonghuas = parseJson<List<DonghuaResponse>>(response)
 
@@ -37,6 +39,7 @@ class YunshanID : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val response = app.get("$mainUrl/api/donghuas").text
         val allDonghuas = parseJson<List<DonghuaResponse>>(response)
         return allDonghuas
@@ -45,6 +48,7 @@ class YunshanID : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val id = url.split("/").last()
         val response = app.get("$mainUrl/api/donghua/$id").text
         val detail = parseJson<DonghuaDetailResponse>(response)
@@ -74,6 +78,7 @@ class YunshanID : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val ep = parseJson<Episode>(data)
 
         ep.videoUrl?.let { url ->
@@ -87,6 +92,7 @@ class YunshanID : MainAPI() {
             }
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

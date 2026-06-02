@@ -27,6 +27,8 @@ class FilmLokalProvider : MainAPI() {
     override val mainPage = mainPageOf(*FilmLokalSeeds.mainPageRows())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val results = runCatching {
             val url = pageUrl(mainUrl, request.data, page)
             val document = app.get(url, headers = FilmLokalUtils.siteHeaders, referer = mainUrl).document
@@ -37,6 +39,7 @@ class FilmLokalProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) return emptyList()
 
@@ -91,7 +94,8 @@ class FilmLokalProvider : MainAPI() {
 
     private fun SearchResponse.matchesQuery(query: String): Boolean {
         val q = query.lowercase()
-        if (q.length <= 2) return true
+        if (q.length <= 2) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         val nameValue = name.lowercase()
         return nameValue.contains(q) ||
             q.split(Regex("\\s+")).filter { it.length >= 3 }.any { nameValue.contains(it) }
@@ -100,6 +104,7 @@ class FilmLokalProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         return runCatching {
             val document = app.get(url, headers = FilmLokalUtils.siteHeaders, referer = mainUrl).document
             FilmLokalParser.parseLoadResponse(this, url, document)
@@ -112,6 +117,7 @@ class FilmLokalProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return FilmLokalExtractor.loadLinks(name, mainUrl, data, subtitleCallback, callback)
     }
 }

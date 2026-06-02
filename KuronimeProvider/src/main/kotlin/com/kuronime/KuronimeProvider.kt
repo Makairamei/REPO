@@ -66,6 +66,8 @@ class KuronimeProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = request.data.replace("%d", page.toString())
         val req = app.get(url)
         mainUrl = getBaseUrl(req.url)
@@ -126,6 +128,7 @@ class KuronimeProvider : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun search(query: String): List<SearchResponse>? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val currentBaseUrl = app.get(mainUrl).url
         return app.post(
             "$currentBaseUrl/wp-admin/admin-ajax.php", data = mapOf(
@@ -146,6 +149,7 @@ class KuronimeProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val currentBaseUrl = getBaseUrl(url)
 
@@ -259,6 +263,7 @@ class KuronimeProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val req = app.get(data)
         val document = req.document
         val currentBaseUrl = getBaseUrl(req.url)
@@ -313,6 +318,7 @@ class KuronimeProvider : MainAPI() {
             }
         )
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 
@@ -473,7 +479,8 @@ suspend fun fetchTmdbLogoUrl(
 
     fun voted(o: JSONObject) = o.optDouble("vote_average", 0.0) > 0 && o.optInt("vote_count", 0) > 0
     fun better(a: JSONObject?, b: JSONObject): Boolean {
-        if (a == null) return true
+        if (a == null) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         val aAvg = a.optDouble("vote_average", 0.0)
         val aCnt = a.optInt("vote_count", 0)
         val bAvg = b.optDouble("vote_average", 0.0)

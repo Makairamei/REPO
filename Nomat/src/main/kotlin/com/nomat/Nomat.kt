@@ -60,6 +60,8 @@ class Nomat : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = if (page == 1) {
             "$mainUrl/${request.data}"
         } else {
@@ -98,12 +100,14 @@ class Nomat : MainAPI() {
 
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val searchUrl = "$mainUrl/?s=$query"
         val document = app.get(searchUrl).document
         return document.select("article.item").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst("h1.entry-title")?.text() ?: return null
@@ -156,6 +160,7 @@ class Nomat : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return try {
             val nhDoc = app.get(data, referer = mainUrl, timeout = 100L).document
 

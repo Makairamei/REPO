@@ -82,6 +82,8 @@ class Heavy : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = buildPageUrl(request.data, page)
 
         val document = app.get(
@@ -170,7 +172,8 @@ class Heavy : MainAPI() {
     private fun isBlockedUrl(url: String): Boolean {
         val path = url.substringAfter(mainUrl).trim('/').lowercase()
 
-        if (path.isBlank()) return true
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val blocked = listOf(
             "free_porn/",
@@ -192,6 +195,7 @@ class Heavy : MainAPI() {
         query: String,
         page: Int
     ): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
 
         if (keyword.isBlank()) {
@@ -239,6 +243,7 @@ class Heavy : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = headers,
@@ -356,6 +361,7 @@ class Heavy : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(
             data,
             headers = headers,

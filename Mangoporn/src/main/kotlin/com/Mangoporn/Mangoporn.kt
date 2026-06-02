@@ -47,6 +47,8 @@ class Mangoporn : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
             val document = app.get("$mainUrl/${request.data}/page/$page").document
             val home = document.select("div.items > article")
                 .mapNotNull { it.toSearchResult() }
@@ -87,6 +89,7 @@ class Mangoporn : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val searchResponse = mutableListOf<SearchResponse>()
 
         for (i in 1..2) {
@@ -107,6 +110,7 @@ class Mangoporn : MainAPI() {
         return searchResponse
     }
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst("div.data > h1")?.text().toString()
@@ -130,11 +134,13 @@ class Mangoporn : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         document.select("div#pettabs > ul a").map {
             val link=it.attr("href")
             loadExtractor(link,subtitleCallback, callback)
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

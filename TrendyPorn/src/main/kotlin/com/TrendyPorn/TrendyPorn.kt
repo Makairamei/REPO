@@ -26,6 +26,8 @@ class TrendyPorn : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(request.data + "page" + page + ".html").document
         val home = document.select("#wrapper > div.container > div:nth-child(4) > div div.well-sm").mapNotNull { it.toSearchResult() }
 
@@ -49,6 +51,7 @@ class TrendyPorn : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("${mainUrl}/search/${query}/page${page}.html").document
         val results = document.select("#wrapper > div.container > div:nth-child(4) > div div.well-sm").mapNotNull { it.toSearchResult() }
         val hasNext = if(results.isEmpty()) false else true
@@ -56,6 +59,7 @@ class TrendyPorn : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val title = document.select("meta[property=og:title]").attr("content")
         val posterUrl = fixUrlNull(document.selectFirst("meta[property=og:image]")?.attr("content")) ?:""
@@ -71,6 +75,7 @@ class TrendyPorn : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
         ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
         val document = app.get(data).document
         val link = document.select("source").attr("src")
@@ -82,6 +87,7 @@ class TrendyPorn : MainAPI() {
                 url = link
             )
         )
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

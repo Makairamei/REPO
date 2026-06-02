@@ -31,6 +31,8 @@ open class Animekhor : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(buildPageUrl(request.data, page)).document
         val home = document.select("div.listupd > article, article.bs, div.bs")
             .mapNotNull { it.toSearchResult() }
@@ -86,6 +88,7 @@ open class Animekhor : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val queryParts = query.lowercase()
             .split(Regex("""\s+"""))
@@ -133,6 +136,7 @@ open class Animekhor : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val title = document.selectFirst("h1.entry-title, h1, .entry-title")
             ?.text()?.trim()?.ifBlank { null }
@@ -183,6 +187,7 @@ open class Animekhor : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val candidates = linkedSetOf<String>()
 

@@ -112,6 +112,8 @@ class InternetArchiveProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         return try {
             val (query, sort) = parseArchiveData(request.data)
             val result = advancedSearch(
@@ -140,6 +142,7 @@ class InternetArchiveProvider : MainAPI() {
         query: String,
         page: Int
     ): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
 
         if (keyword.isBlank()) {
@@ -178,6 +181,7 @@ class InternetArchiveProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         return try {
             val identifier = extractIdentifier(url)
             val metadata = getMetadata(identifier)
@@ -194,6 +198,7 @@ class InternetArchiveProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val loadData = tryParseJson<LoadData>(data)
             ?: runCatching {
                 val identifier = data.trim()

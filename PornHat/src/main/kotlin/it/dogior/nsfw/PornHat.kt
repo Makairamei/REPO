@@ -46,6 +46,8 @@ class PornHat : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val response = app.get(request.data)
         val searchResponses = getVideos(response.document)
         return newHomePageResponse(
@@ -64,6 +66,7 @@ class PornHat : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val safeQuery = URLEncoder.encode(query, "UTF-8")
         val response = app.get("$mainUrl/search/$safeQuery/")
 
@@ -71,6 +74,7 @@ class PornHat : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val response = app.get(url)
         val document = response.document
         val script = document.select("script[type=\"application/ld+json\"]").first()!!.data()
@@ -128,6 +132,7 @@ class PornHat : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val videoPlayer = Jsoup.parse(data)
 
         val url = videoPlayer.select("source[label=\"Auto\"]").attr("src")
@@ -143,6 +148,7 @@ class PornHat : MainAPI() {
                 ExtractorLinkType.M3U8
             )
         )
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

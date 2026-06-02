@@ -58,6 +58,8 @@ class Noxx : MainAPI() {
         )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val browseUrl = buildBrowseUrl(request.data, 1)
         if (page == 1) {
             val document = requestPage(browseUrl).document
@@ -89,11 +91,13 @@ class Noxx : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = requestPage("$mainUrl/browse?q=${query.urlEncode()}").document
         return document.select("a.poster-card").mapNotNull { it.toSeriesSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = requestPage(url).document
         val title = document.selectFirst("section h1")?.text()?.trim().orEmpty()
         val poster = document.selectFirst("section img[alt=\"$title\"]")?.attr("src").toAbsoluteUrl()
@@ -149,6 +153,7 @@ class Noxx : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val response = requestPage(data)
         val buttons = response.document.select("#serverselector button[value], button.sch[value]")
         val seenSubtitles = linkedSetOf<String>()
@@ -258,6 +263,7 @@ class Noxx : MainAPI() {
         val generated = M3u8Helper.generateM3u8("VidSrc", streamUrl, "https://play.xpass.top/", headers = streamHeaders)
         if (generated.isEmpty()) return false
         generated.forEach(callback)
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

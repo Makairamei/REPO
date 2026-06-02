@@ -114,6 +114,8 @@ class HidoristreamProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val documents = buildPageUrls(request.data, page).mapNotNull { url ->
             runCatching { fetchDocument(url) }.getOrNull()
         }
@@ -214,6 +216,7 @@ class HidoristreamProvider : MainAPI() {
         query: String,
         page: Int
     ): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
 
         if (keyword.isBlank()) {
@@ -248,6 +251,7 @@ class HidoristreamProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = fetchDocument(url)
 
         val title = document.selectFirst("h1.entry-title, h1, .entry-title")
@@ -379,6 +383,7 @@ class HidoristreamProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         var html = ""
         var pageUrl = data
         var document: Document? = null

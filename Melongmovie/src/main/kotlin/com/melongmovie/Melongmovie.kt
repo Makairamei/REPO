@@ -112,6 +112,8 @@ class Melongmovie : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = "$mainUrl/${request.data.format(page.coerceAtLeast(1)).trimStart('/')}"
         val document = app.get(url, headers = headers, timeout = 25L).document
 
@@ -130,6 +132,7 @@ class Melongmovie : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return emptyList()
 
@@ -154,6 +157,7 @@ class Melongmovie : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = headers, timeout = 25L).document
 
         val title = listOf(
@@ -278,6 +282,7 @@ class Melongmovie : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val pageUrl = normalizeUrl(data, mainUrl)
 
         val response = app.get(
@@ -322,7 +327,8 @@ class Melongmovie : MainAPI() {
                 found = true
             }
 
-        if (found) return true
+        if (found) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         prioritizeEmbeds(embedLinks)
             .take(12)
@@ -336,7 +342,8 @@ class Melongmovie : MainAPI() {
                     )
                 }.getOrDefault(false)
 
-                if (success) return true
+                if (success) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
                 resolveNestedLinks(embed, pageUrl).forEach { nested ->
                     val fixed = normalizeUrl(nested, embed).replace(".txt", ".m3u8")
@@ -348,7 +355,8 @@ class Melongmovie : MainAPI() {
                             fixed.contains(".mp4", true) ||
                             fixed.contains(".webm", true) -> {
                             emitDirectLink(fixed, embed, callback)
-                            return true
+                            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
                         }
 
                         fixed.startsWith("http", true) -> {
@@ -361,7 +369,8 @@ class Melongmovie : MainAPI() {
                                 )
                             }.getOrDefault(false)
 
-                            if (nestedSuccess) return true
+                            if (nestedSuccess) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
                         }
                     }
                 }
@@ -931,7 +940,8 @@ class Melongmovie : MainAPI() {
     private fun isNavigationUrl(url: String): Boolean {
         val path = url.substringAfter(mainUrl, "").trim('/').lowercase()
 
-        if (path.isBlank()) return true
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val blocked = listOf(
             "genre/",

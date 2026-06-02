@@ -58,6 +58,8 @@ class NontonAnimeIDProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val pageUrl = if (page == 1) {
             request.data
         } else {
@@ -94,6 +96,7 @@ class NontonAnimeIDProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val link = "$mainUrl/?s=$query"
         val document = app.get(link).document
 
@@ -103,6 +106,7 @@ class NontonAnimeIDProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fixUrl = if (url.contains("/anime/")) {
             url
         } else {
@@ -297,6 +301,7 @@ class NontonAnimeIDProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
 
         val document = app.get(data).document
         val iframeLinks = linkedSetOf<String>()
@@ -395,6 +400,7 @@ class NontonAnimeIDProvider : MainAPI() {
             }
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 
@@ -507,7 +513,8 @@ suspend fun fetchTmdbLogoUrl(
 
     fun voted(o: JSONObject) = o.optDouble("vote_average", 0.0) > 0 && o.optInt("vote_count", 0) > 0
     fun better(a: JSONObject?, b: JSONObject): Boolean {
-        if (a == null) return true
+        if (a == null) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         val aAvg = a.optDouble("vote_average", 0.0)
         val aCnt = a.optInt("vote_count", 0)
         val bAvg = b.optDouble("vote_average", 0.0)

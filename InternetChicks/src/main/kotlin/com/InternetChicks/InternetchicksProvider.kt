@@ -7,6 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class InternetchicksProvider: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(internetchicks())
     }
 }

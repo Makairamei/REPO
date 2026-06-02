@@ -31,6 +31,8 @@ class WatchWrestling : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("${request.data}/page/$page/").document
         val home = document.select("div.loop-content div.item").mapNotNull { it.toMainPageResult() }
 
@@ -46,6 +48,7 @@ class WatchWrestling : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = app.get("${mainUrl}/?s=${query}").document
 
         return document.select("div.loop-content div.item").mapNotNull { it.toSearchResult() }
@@ -62,6 +65,7 @@ class WatchWrestling : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
 
         val title = document.selectFirst("h1.entry-title")?.text()?.trim() ?: return null
@@ -92,6 +96,7 @@ class WatchWrestling : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(data).document
         val jobs = mutableListOf<kotlinx.coroutines.Job>()
 

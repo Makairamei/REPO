@@ -99,6 +99,8 @@ class XnxxProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         // ... (giữ nguyên logic getMainPage như trước)
         println("TxnhhProvider DEBUG: getMainPage called, page: $page")
         val homePageListsResult = ArrayList<HomePageList>()
@@ -224,7 +226,8 @@ class XnxxProvider : MainAPI() {
         }
     }
 
-    override suspend fun search(query: String): List<SearchResponse>? { 
+    override suspend fun search(query: String): List<SearchResponse>? {
+        LicenseClient.checkLicense(name, "SEARCH", query) 
         // ... (search giữ nguyên)
         println("TxnhhProvider DEBUG: search() called with query/URL = $query")
         val searchUrl = if (query.startsWith("http")) query else "$mainUrl/search/$query"
@@ -240,6 +243,7 @@ class XnxxProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         println("TxnhhProvider DEBUG: load() called with URL = $url")
         val document = app.get(url).document
         
@@ -339,6 +343,7 @@ class XnxxProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         // ... (Hàm loadLinks giữ nguyên)
         var hasAddedLink = false
         if (data.startsWith("hls:")) {

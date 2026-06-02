@@ -32,6 +32,8 @@ class PasarBokepProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = PasarBokepUtils.pagedUrl(request.data, page, mainUrl)
         val document = app.get(url, headers = PasarBokepUtils.headers, referer = mainUrl).document
         val list = PasarBokepParser.parseCards(document, this)
@@ -39,6 +41,7 @@ class PasarBokepProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encoded = PasarBokepUtils.encodeQuery(query)
         val document = app.get("$mainUrl/?s=$encoded", headers = PasarBokepUtils.headers, referer = mainUrl).document
         return PasarBokepParser.parseCards(document, this)
@@ -52,6 +55,7 @@ class PasarBokepProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fixedUrl = PasarBokepUtils.updateHost(url, mainUrl)
         val document = app.get(fixedUrl, headers = PasarBokepUtils.headers, referer = mainUrl).document
 
@@ -81,6 +85,7 @@ class PasarBokepProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val fixedUrl = PasarBokepUtils.updateHost(data, mainUrl)
         return PasarBokepExtractor.resolve(
             pageUrl = fixedUrl,

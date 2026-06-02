@@ -113,6 +113,8 @@ class Dramacool : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val safePage = if (page < 1) 1 else page
         val url = "$mainUrl/${request.data.format(safePage)}"
 
@@ -182,6 +184,7 @@ class Dramacool : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
         if (encodedQuery.isBlank()) return emptyList()
 
@@ -226,6 +229,7 @@ class Dramacool : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val detailUrl = if (url.contains("/drama-detail/", true)) url else getDetailUrl(url) ?: url
 
         val document = app.get(
@@ -334,6 +338,7 @@ class Dramacool : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(
             data,
             headers = defaultHeaders,

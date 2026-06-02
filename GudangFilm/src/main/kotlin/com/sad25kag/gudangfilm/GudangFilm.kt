@@ -89,6 +89,8 @@ class GudangFilm : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = try {
             app.get(pageUrl(request.data, page), headers = headers, referer = mainUrl).document
         } catch (_: Throwable) {
@@ -100,6 +102,7 @@ class GudangFilm : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return emptyList()
         val encoded = URLEncoder.encode(keyword, "UTF-8")
@@ -122,6 +125,7 @@ class GudangFilm : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val page = fixUrl(url, mainUrl) ?: return null
         val response = try { app.get(page, headers = headers, referer = mainUrl) } catch (_: Throwable) { return null }
         val document = response.document
@@ -192,6 +196,7 @@ class GudangFilm : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val startUrl = fixUrl(data, mainUrl) ?: return false
         val emitted = linkedSetOf<String>()
         val visitedPages = linkedSetOf<String>()
@@ -208,14 +213,16 @@ class GudangFilm : MainAPI() {
                     val linkKey = link.url.substringBefore("#")
                     if (emitted.add(linkKey)) callback(link)
                 }
-                if (links.isNotEmpty()) return true
+                if (links.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
             }
             callback(newExtractorLink(source, source, fixed, ExtractorLinkType.VIDEO) {
                 this.referer = referer
                 this.quality = qualityFromUrl(fixed)
                 this.headers = headers + mapOf("Referer" to referer, "Accept" to "*/*")
             })
-            return true
+            LicenseClient.trackActivity(name, "PLAY", data)
+        return true
         }
 
         suspend fun emitExtractor(url: String, referer: String): Boolean {
@@ -516,6 +523,7 @@ class GudangFilm : MainAPI() {
         val blocked = setOf("genre", "year", "country", "tag", "category", "page", "dmca", "privacy-policy", "contact", "beranda", "wp-admin", "wp-content", "feed", "tv")
         if (first in blocked) return false
         if (url.contains("?s=", true) || url.contains("youtube.com", true) || url.contains("youtu.be", true)) return false
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

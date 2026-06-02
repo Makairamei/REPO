@@ -26,6 +26,8 @@ class KingBokepProvider : MainAPI() {
     override val mainPage = mainPageOf(*KingBokepSeeds.mainPageRows())
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = pageUrl(mainUrl, request.data, page)
         val document = app.get(url, headers = KingBokepUtils.siteHeaders).document
         val results = KingBokepParser.parseListing(this, document)
@@ -33,12 +35,14 @@ class KingBokepProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val url = searchUrl(mainUrl, query)
         val document = app.get(url, headers = KingBokepUtils.siteHeaders).document
         return KingBokepParser.parseListing(this, document)
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url, headers = KingBokepUtils.siteHeaders, referer = mainUrl).document
         return KingBokepParser.parseLoadResponse(this, url, document)
     }
@@ -49,6 +53,7 @@ class KingBokepProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         return KingBokepExtractor.loadLinks(name, mainUrl, data, subtitleCallback, callback)
     }
 }

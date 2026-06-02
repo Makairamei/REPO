@@ -163,6 +163,8 @@ class PornWatch : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get("${request.data}page/$page/").document
         val home     = document.select("div.ml-item").mapNotNull { it.toMainPageResult() }
 
@@ -183,6 +185,7 @@ class PornWatch : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val document = if (page == 1){
             app.get("${mainUrl}/?s=${query}").document
         } else {
@@ -209,6 +212,7 @@ class PornWatch : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(url).document
         val title           = document.selectFirst("div.mvic-desc h3")?.text()?.trim() ?: return null
         val poster          = fixUrlNull(document.selectFirst("div.thumb img")?.attr("src"))
@@ -249,6 +253,7 @@ class PornWatch : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         Log.d("kraptor_$name", "data = ${data}")
         val document = app.get(data).document
         val pettabs  = document.selectFirst("div#pettabs")
@@ -256,6 +261,7 @@ class PornWatch : MainAPI() {
             val videolar = iframe.attr("href")
             loadExtractor(videolar, "${mainUrl}/", subtitleCallback, callback)
         }
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 }

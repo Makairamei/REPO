@@ -70,6 +70,8 @@ open class Rebahin : MainAPI() {
         page: Int,
         request: MainPageRequest,
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val urls =
             listOf(
                 Pair("Featured", "xtab1"),
@@ -136,6 +138,7 @@ open class Rebahin : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encoded = java.net.URLEncoder.encode(query, "UTF-8")
         val document =
             safeGet("$mainUrl/?s=$encoded")?.document ?: return emptyList()
@@ -143,6 +146,7 @@ open class Rebahin : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val req = safeGet(url)
             ?: throw ErrorLoadingException("Rebahin page unreachable: $url")
         directUrl = getBaseUrl(req.url)
@@ -231,6 +235,7 @@ open class Rebahin : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         data.removeSurrounding("[", "]").split(",").map { it.trim() }.amap { link ->
             safeApiCall {
                 when {
@@ -260,6 +265,7 @@ open class Rebahin : MainAPI() {
             }
         }
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

@@ -8,6 +8,7 @@ import android.content.Context
 @CloudstreamPlugin
 class OploverzProviderPlugin: Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         // All providers should be added in this manner. Please don't edit the providers list directly.
         OploverzProvider.context = context
         registerMainAPI(OploverzProvider())

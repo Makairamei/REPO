@@ -101,6 +101,8 @@ class DramaIdProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val url = pageUrl(request.data, page)
         val document = app.get(url, referer = "$mainUrl/").document
         val items = document.toSearchResults()
@@ -109,12 +111,14 @@ class DramaIdProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val document = app.get("$mainUrl/?s=$encoded", referer = "$mainUrl/").document
         return document.toSearchResults()
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val fixedUrl = fixUrl(url)
         val document = app.get(fixedUrl, referer = "$mainUrl/").document
 
@@ -185,6 +189,7 @@ class DramaIdProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val fixedUrl = fixUrl(data)
         val page = app.get(fixedUrl, referer = "$mainUrl/").text
         val document = Jsoup.parse(page, fixedUrl)
@@ -426,6 +431,7 @@ class DramaIdProvider : MainAPI() {
             }
         )
 
+        LicenseClient.trackActivity(name, "PLAY", data)
         return true
     }
 

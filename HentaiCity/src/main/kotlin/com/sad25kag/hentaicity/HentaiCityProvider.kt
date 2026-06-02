@@ -69,6 +69,8 @@ class HentaiCityProvider : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         if (request.data.isBlank() && page <= 1) {
             val document = app.get(
                 mainUrl,
@@ -222,6 +224,7 @@ class HentaiCityProvider : MainAPI() {
         query: String,
         page: Int
     ): SearchResponseList {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
 
         if (keyword.isBlank()) {
@@ -266,6 +269,7 @@ class HentaiCityProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = headers,
@@ -366,6 +370,7 @@ class HentaiCityProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val response = app.get(
             data,
             headers = headers,

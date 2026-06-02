@@ -72,6 +72,8 @@ class Hahomoe : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         if (request.data == "__home__") {
             val document = app.get(
                 mainUrl,
@@ -224,6 +226,7 @@ class Hahomoe : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val results = linkedMapOf<String, SearchResponse>()
         var pageUrl: String? = "$mainUrl/anime"
 
@@ -259,6 +262,7 @@ class Hahomoe : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = commonHeaders,
@@ -393,6 +397,7 @@ class Hahomoe : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val document = app.get(
             data,
             headers = commonHeaders,

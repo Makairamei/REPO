@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class Happy2hubProvider : Plugin() {
     override fun load(context: Context) {
+        LicenseClient.init(context)
         registerMainAPI(Happy2hub())
         registerExtractorAPI(Voe())
         registerExtractorAPI(PixelDrain())

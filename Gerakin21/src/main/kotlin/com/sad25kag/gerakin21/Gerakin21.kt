@@ -131,6 +131,8 @@ class Gerakin21 : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        LicenseClient.requireLicense(name, "HOME")
+        LicenseClient.checkLicense(name, "HOME")
         val document = app.get(
             buildPageUrl(request.data, page),
             headers = commonHeaders,
@@ -296,7 +298,8 @@ class Gerakin21 : MainAPI() {
         val path = runCatching { URI(url).path.orEmpty().trim('/').lowercase() }
             .getOrDefault(url.substringAfter(mainUrl, "").trim('/').lowercase())
 
-        if (path.isBlank()) return true
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val exactBlocked = setOf(
             "trending",
@@ -317,7 +320,8 @@ class Gerakin21 : MainAPI() {
             "register"
         )
 
-        if (path in exactBlocked) return true
+        if (path in exactBlocked) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val prefixBlocked = listOf(
             "genre/",
@@ -333,7 +337,8 @@ class Gerakin21 : MainAPI() {
             "wp-admin"
         )
 
-        if (prefixBlocked.any { path.startsWith(it) }) return true
+        if (prefixBlocked.any { path.startsWith(it) }) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         val lower = url.lowercase()
         return lower.endsWith(".jpg") ||
@@ -346,6 +351,7 @@ class Gerakin21 : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.checkLicense(name, "SEARCH", query)
         val keyword = query.trim()
         if (keyword.isBlank()) return emptyList()
 
@@ -374,6 +380,7 @@ class Gerakin21 : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.checkLicense(name, "LOAD", url)
         val document = app.get(
             url,
             headers = commonHeaders,
@@ -502,6 +509,7 @@ class Gerakin21 : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        LicenseClient.trackActivity(name, "LOAD", data)
         val discovered = linkedSetOf<String>()
         val queue = ArrayDeque<Pair<String, String>>()
         val crawled = mutableSetOf<String>()
@@ -1029,9 +1037,12 @@ class Gerakin21 : MainAPI() {
 
     private fun String.isUiText(): Boolean {
         val lower = trim().lowercase()
-        if (lower.isBlank()) return true
-        if (lower.length <= 1) return true
-        if (lower.matches(Regex("""^\d+$"""))) return true
+        if (lower.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
+        if (lower.length <= 1) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
+        if (lower.matches(Regex("""^\d+$"""))) LicenseClient.trackActivity(name, "PLAY", data)
+        return true
 
         return lower in setOf(
             "home", "next", "previous", "prev", "movies", "movie", "tv series",
