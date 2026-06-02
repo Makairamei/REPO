@@ -479,8 +479,7 @@ suspend fun fetchTmdbLogoUrl(
 
     fun voted(o: JSONObject) = o.optDouble("vote_average", 0.0) > 0 && o.optInt("vote_count", 0) > 0
     fun better(a: JSONObject?, b: JSONObject): Boolean {
-        if (a == null) LicenseClient.trackActivity(name, "PLAY")
-        return true
+        if (a == null) return true
         val aAvg = a.optDouble("vote_average", 0.0)
         val aCnt = a.optInt("vote_count", 0)
         val bAvg = b.optDouble("vote_average", 0.0)
