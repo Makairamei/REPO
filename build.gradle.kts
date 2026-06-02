@@ -13,9 +13,9 @@ buildscript {
 
     dependencies {
 
-        // Android Gradle Plugin - compatible with Kotlin 2.1.0
+        // Android Gradle Plugin - supports Kotlin 2.3.0
         classpath(
-            "com.android.tools.build:gradle:8.7.3"
+            "com.android.tools.build:gradle:8.8.0"
         )
 
         // CloudStream Gradle Plugin
@@ -23,9 +23,9 @@ buildscript {
             "com.github.recloudstream:gradle:master-SNAPSHOT"
         )
 
-        // Kotlin - must match cloudstream.jar version
+        // Kotlin - must match cloudstream.jar version (2.3.0)
         classpath(
-            "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0"
+            "org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0"
         )
     }
 }
