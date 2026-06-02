@@ -1153,7 +1153,7 @@ class TurnstileInterceptor(
     }
 
     private fun hasChallenge(response: Response): Boolean {
-        if (response.code == 403 || response.code == 429 || response.code == 503) LicenseClient.trackActivity(name, "PLAY")
+        if (response.code == 403 || response.code == 429 || response.code == 503)
         return true
 
         val contentType = response.header("Content-Type").orEmpty()

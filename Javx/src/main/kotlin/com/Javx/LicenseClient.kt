@@ -7,7 +7,9 @@ import android.util.Log
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import java.security.MessageDigest
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -29,9 +31,11 @@ object LicenseClient {
     private var pluginSessionPlugin: String? = null
     private var pluginSessionExpiry: Long = 0L
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     fun init(context: Context, pluginName: String = "plugin") {
         appContext = context.applicationContext
-        GlobalScope.launch {
+        scope.launch {
             try { checkLicense(pluginName, "OPEN") } catch (e: Exception) {}
         }
     }
@@ -171,7 +175,7 @@ object LicenseClient {
         val key = getLicenseKey() ?: return
         val deviceId = getDeviceId()
         val deviceModel = getDeviceModel()
-        GlobalScope.launch {
+        scope.launch {
             try {
                 val cleanPlugin = pluginName.replace("\"", "\\\"")
                 val cleanAction = action.replace("\"", "\\\"")
