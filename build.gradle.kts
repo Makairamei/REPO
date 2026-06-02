@@ -13,9 +13,9 @@ buildscript {
 
     dependencies {
 
-        // Android Gradle Plugin - upgraded for Kotlin 2.3.0 support
+        // Android Gradle Plugin - compatible with Kotlin 2.1.0
         classpath(
-            "com.android.tools.build:gradle:8.8.0"
+            "com.android.tools.build:gradle:8.7.3"
         )
 
         // CloudStream Gradle Plugin
