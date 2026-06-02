@@ -197,7 +197,7 @@ class ZoronimeProvider : MainAPI() {
                 )
             }
 
-            LicenseClient.trackActivity(name, "PLAY", data)
+            LicenseClient.trackActivity(name, "PLAY")
         return true
         }
 

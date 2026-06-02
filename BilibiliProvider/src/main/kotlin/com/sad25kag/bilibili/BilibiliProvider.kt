@@ -606,7 +606,7 @@ class BilibiliProvider : MainAPI() {
                             this.quality = Qualities.Unknown.value
                         }
                     )
-                    LicenseClient.trackActivity(name, "PLAY", data)
+                    LicenseClient.trackActivity(name, "PLAY")
         return true // Return true so user sees the message
                 }
                 
@@ -622,7 +622,7 @@ class BilibiliProvider : MainAPI() {
                             this.quality = Qualities.Unknown.value
                         }
                     )
-                    LicenseClient.trackActivity(name, "PLAY", data)
+                    LicenseClient.trackActivity(name, "PLAY")
         return true // Return true so user sees the message
                 }
                 

@@ -254,7 +254,7 @@ class CamWh : MainAPI() {
             }
         }
 
-        if (emitted.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY", data)
+        if (emitted.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         val webview = WebViewResolver(

@@ -550,9 +550,9 @@ class AnimeSailProvider : MainAPI() {
 
     private fun shouldFollowNestedLink(url: String, playerPath: String): Boolean {
         val lower = url.lowercase()
-        if (isDirectMediaUrl(lower)) LicenseClient.trackActivity(name, "PLAY", data)
+        if (isDirectMediaUrl(lower)) LicenseClient.trackActivity(name, "PLAY")
         return true
-        if (lower.contains(playerPath.lowercase())) LicenseClient.trackActivity(name, "PLAY", data)
+        if (lower.contains(playerPath.lowercase())) LicenseClient.trackActivity(name, "PLAY")
         return true
         val hostHints = listOf(
             "yourupload",
@@ -848,7 +848,7 @@ class AnimeSailProvider : MainAPI() {
                 )
             }
         )
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 
@@ -923,7 +923,7 @@ class AnimeSailProvider : MainAPI() {
                 )
             }
         )
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 
@@ -946,7 +946,7 @@ class AnimeSailProvider : MainAPI() {
 
             if (isDirectMediaUrl(current)) {
                 emitDirectMediaLink(current, serverName, quality, currentReferer ?: referer, callback)
-                LicenseClient.trackActivity(name, "PLAY", data)
+                LicenseClient.trackActivity(name, "PLAY")
         return true
             }
 
@@ -982,7 +982,7 @@ class AnimeSailProvider : MainAPI() {
             val direct = discovered.firstOrNull { isDirectMediaUrl(it) }
             if (!direct.isNullOrBlank()) {
                 emitDirectMediaLink(direct, serverName, quality, current, callback)
-                LicenseClient.trackActivity(name, "PLAY", data)
+                LicenseClient.trackActivity(name, "PLAY")
         return true
             }
 
@@ -1016,11 +1016,11 @@ class AnimeSailProvider : MainAPI() {
         val lower = candidate.lowercase()
         if (isDirectMediaUrl(lower)) return false
         if (lower.startsWith("javascript:") || lower.startsWith("data:")) return false
-        if (lower.contains("/utils/player/")) LicenseClient.trackActivity(name, "PLAY", data)
+        if (lower.contains("/utils/player/")) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         val hints = listOf("yourupload", "pixeldrain", "pompom", "pancal", "myvidplay", "aghanim", "uservideo", "mp4upload")
-        if (hints.any { lower.contains(it) }) LicenseClient.trackActivity(name, "PLAY", data)
+        if (hints.any { lower.contains(it) }) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         val currentHost = runCatching { URI(currentUrl).host?.lowercase().orEmpty() }.getOrDefault("")
@@ -1106,7 +1106,7 @@ class AnimeSailProvider : MainAPI() {
                 )
             }
         )
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 
@@ -1153,7 +1153,7 @@ class TurnstileInterceptor(
     }
 
     private fun hasChallenge(response: Response): Boolean {
-        if (response.code == 403 || response.code == 429 || response.code == 503) LicenseClient.trackActivity(name, "PLAY", data)
+        if (response.code == 403 || response.code == 429 || response.code == 503) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         val contentType = response.header("Content-Type").orEmpty()

@@ -160,7 +160,7 @@ class Happy2hub : MainAPI() {
 
     private fun isBlockedUrl(url: String): Boolean {
         val path = url.substringAfter(mainUrl).trim('/').lowercase()
-        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         val blockedPrefixes = listOf(

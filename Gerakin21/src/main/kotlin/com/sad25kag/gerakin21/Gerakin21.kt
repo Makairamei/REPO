@@ -298,7 +298,7 @@ class Gerakin21 : MainAPI() {
         val path = runCatching { URI(url).path.orEmpty().trim('/').lowercase() }
             .getOrDefault(url.substringAfter(mainUrl, "").trim('/').lowercase())
 
-        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         val exactBlocked = setOf(
@@ -320,7 +320,7 @@ class Gerakin21 : MainAPI() {
             "register"
         )
 
-        if (path in exactBlocked) LicenseClient.trackActivity(name, "PLAY", data)
+        if (path in exactBlocked) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         val prefixBlocked = listOf(
@@ -337,7 +337,7 @@ class Gerakin21 : MainAPI() {
             "wp-admin"
         )
 
-        if (prefixBlocked.any { path.startsWith(it) }) LicenseClient.trackActivity(name, "PLAY", data)
+        if (prefixBlocked.any { path.startsWith(it) }) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         val lower = url.lowercase()
@@ -1037,11 +1037,11 @@ class Gerakin21 : MainAPI() {
 
     private fun String.isUiText(): Boolean {
         val lower = trim().lowercase()
-        if (lower.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        if (lower.isBlank()) LicenseClient.trackActivity(name, "PLAY")
         return true
-        if (lower.length <= 1) LicenseClient.trackActivity(name, "PLAY", data)
+        if (lower.length <= 1) LicenseClient.trackActivity(name, "PLAY")
         return true
-        if (lower.matches(Regex("""^\d+$"""))) LicenseClient.trackActivity(name, "PLAY", data)
+        if (lower.matches(Regex("""^\d+$"""))) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         return lower in setOf(

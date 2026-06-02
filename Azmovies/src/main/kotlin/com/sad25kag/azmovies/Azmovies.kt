@@ -283,7 +283,7 @@ class Azmovies : MainAPI() {
 
         if (generatedLinks.isEmpty()) return false
         generatedLinks.forEach(callback)
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 

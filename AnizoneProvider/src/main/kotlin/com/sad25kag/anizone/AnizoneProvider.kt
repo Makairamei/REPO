@@ -91,7 +91,7 @@ class AnizoneProvider : MainAPI() {
     )
 
     private suspend fun initializeLiveWire(): Boolean {
-        if (!wireData["wireSnapshot"].isNullOrBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        if (!wireData["wireSnapshot"].isNullOrBlank()) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         try {
@@ -111,7 +111,7 @@ class AnizoneProvider : MainAPI() {
             wireData["wireSnapshot"] = snapshot
 
             sortAnimeLatest()
-            LicenseClient.trackActivity(name, "PLAY", data)
+            LicenseClient.trackActivity(name, "PLAY")
         return true
         } catch (e: Exception) {
             Log.e("AniZone Init", "Error initializeLiveWire: ${e.message}")

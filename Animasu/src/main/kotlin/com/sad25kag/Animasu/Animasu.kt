@@ -337,7 +337,7 @@ class Animasu : MainAPI() {
             )
         }
 
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 

@@ -213,7 +213,7 @@ class GudangFilm : MainAPI() {
                     val linkKey = link.url.substringBefore("#")
                     if (emitted.add(linkKey)) callback(link)
                 }
-                if (links.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY", data)
+                if (links.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY")
         return true
             }
             callback(newExtractorLink(source, source, fixed, ExtractorLinkType.VIDEO) {
@@ -221,7 +221,7 @@ class GudangFilm : MainAPI() {
                 this.quality = qualityFromUrl(fixed)
                 this.headers = headers + mapOf("Referer" to referer, "Accept" to "*/*")
             })
-            LicenseClient.trackActivity(name, "PLAY", data)
+            LicenseClient.trackActivity(name, "PLAY")
         return true
         }
 
@@ -523,7 +523,7 @@ class GudangFilm : MainAPI() {
         val blocked = setOf("genre", "year", "country", "tag", "category", "page", "dmca", "privacy-policy", "contact", "beranda", "wp-admin", "wp-content", "feed", "tv")
         if (first in blocked) return false
         if (url.contains("?s=", true) || url.contains("youtube.com", true) || url.contains("youtu.be", true)) return false
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 

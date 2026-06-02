@@ -263,7 +263,7 @@ class Noxx : MainAPI() {
         val generated = M3u8Helper.generateM3u8("VidSrc", streamUrl, "https://play.xpass.top/", headers = streamHeaders)
         if (generated.isEmpty()) return false
         generated.forEach(callback)
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 

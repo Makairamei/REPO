@@ -268,7 +268,7 @@ class LayarKacaProvider : MainAPI() {
         val value = url.lowercase()
         val path = runCatching { URI(url).path.trim('/') }.getOrDefault(value)
 
-        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY", data)
+        if (path.isBlank()) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         return listOf(

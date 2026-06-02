@@ -307,7 +307,7 @@ class Alqanime : MainAPI() {
                 this.quality = quality
                 this.headers = headers
             })
-            LicenseClient.trackActivity(name, "PLAY", data)
+            LicenseClient.trackActivity(name, "PLAY")
         return true
         }
 
@@ -396,7 +396,7 @@ class Alqanime : MainAPI() {
                 this.quality = quality
                 this.headers = commonHeaders + mapOf("Referer" to url)
             })
-            LicenseClient.trackActivity(name, "PLAY", data)
+            LicenseClient.trackActivity(name, "PLAY")
         return true
         }
 
@@ -463,7 +463,7 @@ class Alqanime : MainAPI() {
                 emitted = true
             }
 
-            if (emitted) LicenseClient.trackActivity(name, "PLAY", data)
+            if (emitted) LicenseClient.trackActivity(name, "PLAY")
         return true
 
             runCatching {

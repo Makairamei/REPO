@@ -431,7 +431,7 @@ class DramaIdProvider : MainAPI() {
             }
         )
 
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 

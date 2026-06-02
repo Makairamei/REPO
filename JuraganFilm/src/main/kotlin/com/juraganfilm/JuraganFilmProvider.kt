@@ -210,7 +210,7 @@ class JuraganFilmProvider : MainAPI() {
                     )
                 }
             )
-            LicenseClient.trackActivity(name, "PLAY", data)
+            LicenseClient.trackActivity(name, "PLAY")
         return true
         }
 
@@ -272,7 +272,7 @@ class JuraganFilmProvider : MainAPI() {
                 tryExtractor(candidate, startUrl) -> found = true
             }
         }
-        if (found) LicenseClient.trackActivity(name, "PLAY", data)
+        if (found) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         candidates

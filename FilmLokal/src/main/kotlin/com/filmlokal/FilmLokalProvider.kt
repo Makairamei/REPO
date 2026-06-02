@@ -94,7 +94,7 @@ class FilmLokalProvider : MainAPI() {
 
     private fun SearchResponse.matchesQuery(query: String): Boolean {
         val q = query.lowercase()
-        if (q.length <= 2) LicenseClient.trackActivity(name, "PLAY", data)
+        if (q.length <= 2) LicenseClient.trackActivity(name, "PLAY")
         return true
         val nameValue = name.lowercase()
         return nameValue.contains(q) ||

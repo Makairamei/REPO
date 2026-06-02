@@ -307,7 +307,7 @@ class BondageValley : MainAPI() {
             }
         }
 
-        if (emitted.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY", data)
+        if (emitted.isNotEmpty()) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         return runCatching {

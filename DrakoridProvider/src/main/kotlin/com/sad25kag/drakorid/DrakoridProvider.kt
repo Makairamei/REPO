@@ -342,7 +342,7 @@ class DrakoridProvider : MainAPI() {
 
             if (!mediaUrl.isNullOrBlank()) {
                 emitDirect(mediaUrl, iframeSrc, callback)
-                LicenseClient.trackActivity(name, "PLAY", data)
+                LicenseClient.trackActivity(name, "PLAY")
         return true
             }
         }

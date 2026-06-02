@@ -465,7 +465,7 @@ class Anoboy : MainAPI() {
             )
         }
 
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 
@@ -607,7 +607,7 @@ class Anoboy : MainAPI() {
             }
         )
 
-        LicenseClient.trackActivity(name, "PLAY", data)
+        LicenseClient.trackActivity(name, "PLAY")
         return true
     }
 
@@ -701,7 +701,7 @@ class Anoboy : MainAPI() {
         val lower = url.lowercase()
 
         if (isBadUrl(url)) return false
-        if (isDirectMedia(url)) LicenseClient.trackActivity(name, "PLAY", data)
+        if (isDirectMedia(url)) LicenseClient.trackActivity(name, "PLAY")
         return true
 
         return lower.contains("blogger.com/video.g") ||
