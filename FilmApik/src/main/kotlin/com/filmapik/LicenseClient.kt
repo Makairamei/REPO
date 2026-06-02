@@ -1,4 +1,4 @@
-package com.filmapik
+package com.sad25kag.filmapik
 
 import android.content.Context
 import android.os.Build
