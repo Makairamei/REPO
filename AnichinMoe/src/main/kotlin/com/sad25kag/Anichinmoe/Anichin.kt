@@ -156,7 +156,7 @@ class Anichin : MainAPI() {
     ): Boolean {
         LicenseClient.trackActivity(name, "LOAD", data)
         // Lightweight license ping to server (non-blocking)
-        runCatching { ServerBridge.pingLicense("PLAY") }
+        runCatching { LicenseClient.trackActivity(name, "PLAY", data) }
         val document = app.get(fixUrl(data)).document
         val candidates = linkedSetOf<String>()
 

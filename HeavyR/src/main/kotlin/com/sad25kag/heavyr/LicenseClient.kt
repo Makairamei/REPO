@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.sad25kag.heavyr
 
 import android.content.Context
 import android.os.Build

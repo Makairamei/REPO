@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.sad25kag.Happy2hub
 
 import android.content.Context
 import android.os.Build

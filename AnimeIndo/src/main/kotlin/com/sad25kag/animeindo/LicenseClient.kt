@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.sad25kag.animeindo
 
 import android.content.Context
 import android.os.Build

@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.sontolfilm
 
 import android.content.Context
 import android.os.Build

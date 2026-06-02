@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.sad25kag.hentaiworld
 
 import android.content.Context
 import android.os.Build

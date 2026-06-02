@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.putarflix
 
 import android.content.Context
 import android.os.Build

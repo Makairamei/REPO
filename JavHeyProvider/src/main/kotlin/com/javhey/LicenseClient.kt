@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.javhey
 
 import android.content.Context
 import android.os.Build

@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package recloudstream
 
 import android.content.Context
 import android.os.Build

@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.javfc
 
 import android.content.Context
 import android.os.Build

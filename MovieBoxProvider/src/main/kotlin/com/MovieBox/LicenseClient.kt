@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.MovieBox
 
 import android.content.Context
 import android.os.Build

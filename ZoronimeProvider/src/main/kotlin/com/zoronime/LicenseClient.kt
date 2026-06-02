@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.zoronime
 
 import android.content.Context
 import android.os.Build

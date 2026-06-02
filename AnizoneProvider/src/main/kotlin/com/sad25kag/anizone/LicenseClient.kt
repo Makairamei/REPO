@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.sad25kag.anizone
 
 import android.content.Context
 import android.os.Build

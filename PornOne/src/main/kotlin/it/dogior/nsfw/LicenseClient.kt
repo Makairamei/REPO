@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package it.dogior.nsfw
 
 import android.content.Context
 import android.os.Build

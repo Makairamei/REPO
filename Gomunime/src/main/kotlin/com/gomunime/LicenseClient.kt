@@ -1,4 +1,4 @@
-﻿package com.Anichinmoe
+package com.gomunime
 
 import android.content.Context
 import android.os.Build
