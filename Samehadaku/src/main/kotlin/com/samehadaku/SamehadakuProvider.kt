@@ -109,6 +109,7 @@ class SamehadakuProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        LicenseClient.trackActivity(name, "SEARCH", query)
         LicenseClient.checkLicense(name, "SEARCH", query)
         val results = linkedMapOf<String, SearchResponse>()
         for (page in 1..5) {
@@ -122,6 +123,7 @@ class SamehadakuProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        LicenseClient.trackActivity(name, "LOAD", url)
         LicenseClient.checkLicense(name, "LOAD", url)
         val firstResponse = safeGet(url) ?: return null
         val entryUrl = if (url.contains("/anime/", true)) {

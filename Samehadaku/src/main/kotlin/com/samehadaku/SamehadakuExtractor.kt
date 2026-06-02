@@ -122,6 +122,7 @@ object SamehadakuExtractor {
         runCatching {
             loadExtractor(clean, referer, subtitleCallback) { link ->
                 found = true
+                LicenseClient.trackActivity("Samehadaku", "PLAY", link.url)
                 callback.invoke(link)
             }
         }
@@ -139,6 +140,7 @@ object SamehadakuExtractor {
             runCatching {
                 loadExtractor(nested, clean, subtitleCallback) { link ->
                     found = true
+                    LicenseClient.trackActivity("Samehadaku", "PLAY", link.url)
                     callback.invoke(link)
                 }
             }
@@ -286,6 +288,8 @@ object SamehadakuExtractor {
         if (clean.isBlank() || !isVideoUrl(clean)) return false
         val quality = qualityName.fixQuality().takeIf { it > 0 } ?: Qualities.Unknown.value
         val directHeaders = mapOf("Referer" to referer, "Origin" to originOf(referer))
+
+        LicenseClient.trackActivity("Samehadaku", "PLAY", clean)
 
         return if (clean.contains(".m3u8", true)) {
             generateM3u8(
