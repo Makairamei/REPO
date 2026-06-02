@@ -1,6 +1,7 @@
 package com.sad25kag.freepornvideos
 
 import com.lagradost.cloudstream3.Actor
+import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.MainAPI
@@ -66,28 +67,28 @@ class FreePornVideos : MainAPI() {
         "categories/ebony/%d/" to "Ebony"
     )
 
-    override suspend fun getMainPage(page: Int, request: MainPageRequest) =
-        app.get(fixUrl(request.data.format(page.coerceAtLeast(1)))).document.let {
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         LicenseClient.requireLicense(name, "HOME")
-        LicenseClient.checkLicense(name, "HOME") document ->
-            val home = document.select(
-                "#list_videos_common_videos_list_items > div.item, " +
-                    "#custom_list_videos_videos_list_search_result_items > div.item, " +
-                    "div.item"
-            ).mapNotNull { it.toSearchResult() }
-                .distinctBy { it.url }
+        LicenseClient.checkLicense(name, "HOME")
+        val document = app.get(fixUrl(request.data.format(page.coerceAtLeast(1)))).document
+        val home = document.select(
+            "#list_videos_common_videos_list_items > div.item, " +
+                "#custom_list_videos_videos_list_search_result_items > div.item, " +
+                "div.item"
+        ).mapNotNull { it.toSearchResult() }
+            .distinctBy { it.url }
 
-            newHomePageResponse(
-                request.name,
-                home,
-                hasNext = document.selectFirst(
-                    "a.next, " +
-                        "li.next a, " +
-                        ".pagination a:contains(Next), " +
-                        "a[href*='/${page + 1}/']"
-                ) != null || home.isNotEmpty()
-            )
-        }
+        return newHomePageResponse(
+            request.name,
+            home,
+            hasNext = document.selectFirst(
+                "a.next, " +
+                    "li.next a, " +
+                    ".pagination a:contains(Next), " +
+                    "a[href*='/${page + 1}/']"
+            ) != null || home.isNotEmpty()
+        )
+    }
 
     override suspend fun search(query: String): List<SearchResponse> {
         LicenseClient.checkLicense(name, "SEARCH", query)
