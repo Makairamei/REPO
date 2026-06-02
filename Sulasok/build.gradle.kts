@@ -15,6 +15,5 @@ cloudstream {
     status = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")
     iconUrl = "https://sulasok.uno/00ICON_7IFI9DWVV1.png"
-
-    isCrossPlatform = true
+    // Removed isCrossPlatform = true because plugin uses Android imports
 }
