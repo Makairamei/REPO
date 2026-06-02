@@ -58,9 +58,9 @@ class FitNakedGirls : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest) =
-        app.get(fixUrl(request.data.format(page))).document.let {
-        LicenseClient.requireLicense(name, "HOME")
-        LicenseClient.checkLicense(name, "HOME") document ->
+        app.get(fixUrl(request.data.format(page))).document.let { document ->
+            LicenseClient.requireLicense(name, "HOME")
+            LicenseClient.checkLicense(name, "HOME")
             val home = document.select(
                 "li.g1-collection-item, " +
                     "article, " +
