@@ -57,6 +57,12 @@ subprojects {
     apply(plugin = "kotlin-android")
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
+    tasks.configureEach {
+        if (name == "ensureJarCompatibility") {
+            enabled = false
+        }
+    }
+
     cloudstream {
 
         setRepo(
