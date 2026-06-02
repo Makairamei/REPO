@@ -25,7 +25,7 @@ buildscript {
 
         // Kotlin - must match cloudstream.jar version
         classpath(
-            "org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0"
+            "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0"
         )
     }
 }
